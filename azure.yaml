@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: teams-ado-mcp
+metadata:
+  template: teams-ado-mcp@0.0.1-beta
+
+# Infrastructure configuration
+infra:
+  provider: bicep
+
+# Services configuration
+services:
+  mcp-server:
+    project: ./McpServer
+    language: dotnet
+    host: containerapp
+
+  teams-bot:
+    project: ./TeamsBot
+    language: dotnet
+    host: containerapp
+
+# Global hooks
+hooks:
+  preprovision:
+    posix:
+      shell: sh
+      run: |
+        echo "Preparing for provision..."
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "Preparing for provision..."
+  
+  postprovision:
+    posix:
+      shell: sh
+      run: |
+        echo "Configuring deployed resources..."
+        # Add Azure DevOps PAT to Key Vault if not exists
+        if [ ! -z "$AZURE_DEVOPS_PAT" ]; then
+          az keyvault secret set --vault-name $(azd env get-values | grep KEY_VAULT_NAME | cut -d'=' -f2) --name "azure-devops-pat" --value "$AZURE_DEVOPS_PAT" --only-show-errors
+        fi
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "Configuring deployed resources..."
+        # Add Azure DevOps PAT to Key Vault if not exists
+        $pat = $env:AZURE_DEVOPS_PAT
+        if ($pat) {
+          $keyVaultName = (azd env get-values | Select-String "KEY_VAULT_NAME=(.+)").Matches[0].Groups[1].Value
+          az keyvault secret set --vault-name $keyVaultName --name "azure-devops-pat" --value $pat --only-show-errors
+        }
+
+  predeploy:
+    posix:
+      shell: sh
+      run: |
+        echo "Preparing for deployment..."
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "Preparing for deployment..."
+
+  postdeploy:
+    posix:
+      shell: sh
+      run: |
+        echo "Deployment completed successfully!"
+        echo "MCP Server URL: https://$(azd env get-values | grep MCP_SERVER_APP_FQDN | cut -d'=' -f2)"
+        echo "Teams Bot URL: https://$(azd env get-values | grep TEAMS_APP_FQDN | cut -d'=' -f2)"
+        echo ""
+        echo "🔐 Local Development Setup:"
+        echo "This project uses Visual Studio User Secrets for local development."
+        echo "See docs/USER_SECRETS_SETUP.md for configuration instructions."
+        echo "Use 'dotnet user-secrets' commands instead of .env files."
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "Deployment completed successfully!"
+        $mcpFqdn = (azd env get-values | Select-String "MCP_SERVER_APP_FQDN=(.+)").Matches[0].Groups[1].Value
+        $teamsFqdn = (azd env get-values | Select-String "TEAMS_APP_FQDN=(.+)").Matches[0].Groups[1].Value
+        Write-Host "MCP Server URL: https://$mcpFqdn"
+        Write-Host "Teams Bot URL: https://$teamsFqdn"
+        Write-Host ""
+        Write-Host "🔐 Local Development Setup:"
+        Write-Host "This project uses Visual Studio User Secrets for local development."
+        Write-Host "See docs/USER_SECRETS_SETUP.md for configuration instructions."
+        Write-Host "Use 'dotnet user-secrets' commands instead of .env files."

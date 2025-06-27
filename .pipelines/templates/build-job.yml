@@ -1,0 +1,172 @@
+# Build job template for Teams-Azure DevOps MCP project
+# This template builds both .NET applications and creates container images
+
+parameters:
+  - name: pool
+    type: object
+  - name: buildConfiguration
+    type: string
+    default: 'Release'
+
+jobs:
+  - job: BuildApplications
+    displayName: 'Build .NET Applications'
+    pool: ${{ parameters.pool }}
+    
+    variables:
+      ob_outputDirectory: '$(Build.ArtifactStagingDirectory)'
+      ob_sdl_binskim_break: true
+      ob_sdl_credscan_suppressionsFile: '$(Build.SourcesDirectory)/.config/CredScanSuppressions.json'
+    
+    steps:
+      # Setup .NET SDK
+      - task: UseDotNet@2
+        displayName: 'Use .NET 8.0 SDK'
+        inputs:
+          packageType: 'sdk'
+          version: '8.0.x'
+          includePreviewVersions: false
+      
+      # Restore NuGet packages
+      - task: DotNetCoreCLI@2
+        displayName: 'Restore packages'
+        inputs:
+          command: 'restore'
+          projects: '**/*.csproj'
+          restoreArguments: '--locked-mode'
+      
+      # Build solution
+      - task: DotNetCoreCLI@2
+        displayName: 'Build solution'
+        inputs:
+          command: 'build'
+          projects: 'teams-ado-mcp.sln'
+          arguments: '--configuration ${{ parameters.buildConfiguration }} --no-restore'
+      
+      # Run unit tests
+      - task: DotNetCoreCLI@2
+        displayName: 'Run unit tests'
+        inputs:
+          command: 'test'
+          projects: '**/*Tests.csproj'
+          arguments: '--configuration ${{ parameters.buildConfiguration }} --no-build --collect:"XPlat Code Coverage" --results-directory $(Agent.TempDirectory)/TestResults'
+          publishTestResults: true
+      
+      # Publish code coverage
+      - task: PublishCodeCoverageResults@1
+        displayName: 'Publish code coverage'
+        inputs:
+          codeCoverageTool: 'Cobertura'
+          summaryFileLocation: '$(Agent.TempDirectory)/TestResults/**/coverage.cobertura.xml'
+        condition: succeededOrFailed()
+      
+      # Publish MCP Server
+      - task: DotNetCoreCLI@2
+        displayName: 'Publish MCP Server'
+        inputs:
+          command: 'publish'
+          projects: 'McpServer/McpServer.csproj'
+          arguments: '--configuration ${{ parameters.buildConfiguration }} --no-build --output $(ob_outputDirectory)/mcp-server'
+          publishWebProjects: false
+          zipAfterPublish: false
+      
+      # Publish Teams Bot
+      - task: DotNetCoreCLI@2
+        displayName: 'Publish Teams Bot'
+        inputs:
+          command: 'publish'
+          projects: 'TeamsBot/TeamsBot.csproj'
+          arguments: '--configuration ${{ parameters.buildConfiguration }} --no-build --output $(ob_outputDirectory)/teams-bot'
+          publishWebProjects: false
+          zipAfterPublish: false
+      
+      # Copy Bicep templates
+      - task: CopyFiles@2
+        displayName: 'Copy Bicep templates'
+        inputs:
+          SourceFolder: 'infra'
+          Contents: |
+            **/*.bicep
+            **/*.json
+          TargetFolder: '$(ob_outputDirectory)/infra'
+          preserveTimestamp: true
+      
+      # Copy Dockerfiles
+      - task: CopyFiles@2
+        displayName: 'Copy Dockerfiles'
+        inputs:
+          SourceFolder: '$(Build.SourcesDirectory)'
+          Contents: |
+            McpServer/Dockerfile
+            TeamsBot/Dockerfile
+            .dockerignore
+          TargetFolder: '$(ob_outputDirectory)/docker'
+          preserveTimestamp: true
+
+  - job: BuildContainerImages
+    displayName: 'Build Container Images'
+    dependsOn: BuildApplications
+    pool: ${{ parameters.pool }}
+    
+    variables:
+      ob_outputDirectory: '$(Build.ArtifactStagingDirectory)'
+      containerRegistryServiceConnection: '$(azureServiceConnection)'
+    
+    steps:
+      # Download build artifacts
+      - download: current
+        artifact: drop
+        displayName: 'Download build artifacts'
+      
+      # Build and push MCP Server container
+      - task: Docker@2
+        displayName: 'Build and push MCP Server image'
+        inputs:
+          containerRegistry: '$(containerRegistryServiceConnection)'
+          repository: 'mcp-server'
+          command: 'buildAndPush'
+          Dockerfile: '$(Pipeline.Workspace)/drop/docker/McpServer/Dockerfile'
+          buildContext: '$(Pipeline.Workspace)/drop'
+          tags: |
+            $(Build.BuildNumber)
+            latest
+          addPipelineData: false
+      
+      # Build and push Teams Bot container
+      - task: Docker@2
+        displayName: 'Build and push Teams Bot image'
+        inputs:
+          containerRegistry: '$(containerRegistryServiceConnection)'
+          repository: 'teams-bot'
+          command: 'buildAndPush'
+          Dockerfile: '$(Pipeline.Workspace)/drop/docker/TeamsBot/Dockerfile'
+          buildContext: '$(Pipeline.Workspace)/drop'
+          tags: |
+            $(Build.BuildNumber)
+            latest
+          addPipelineData: false
+      
+      # Security scan container images using Azure CLI
+      - task: AzureCLI@2
+        displayName: 'Security scan - MCP Server image'
+        inputs:
+          azureSubscription: '$(containerRegistryServiceConnection)'
+          scriptType: 'bash'
+          scriptLocation: 'inlineScript'
+          inlineScript: |
+            echo "Container security scanning would be performed here"
+            echo "Image: $(containerRegistryName).azurecr.io/mcp-server:$(Build.BuildNumber)"
+            # Add actual security scanning commands when available
+        continueOnError: true
+      
+      - task: AzureCLI@2
+        displayName: 'Security scan - Teams Bot image'
+        inputs:
+          azureSubscription: '$(containerRegistryServiceConnection)'
+          scriptType: 'bash'
+          scriptLocation: 'inlineScript'
+          inlineScript: |
+            echo "Container security scanning would be performed here"
+            echo "Image: $(containerRegistryName).azurecr.io/teams-bot:$(Build.BuildNumber)"
+            # Add actual security scanning commands when available
+        continueOnError: true

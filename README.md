@@ -48,8 +48,9 @@
 ### Implementation Steps
 
 1. **Set Up the Development Environment**:
-   - Install .NET SDK, Azure CLI, and Docker.
-   - Set up Azure resources (App Service, SQL Database, Redis Cache).
+   - Install .NET 8 SDK, Azure CLI, and Docker.
+   - Configure User Secrets for local development (see `docs/USER_SECRETS_SETUP.md`).
+   - Set up Azure resources using azd deployment.
 
 2. **Create the Teams Bot**:
    - Use the Microsoft Bot Framework to create a bot that can join meetings and listen for messages.
@@ -75,6 +76,51 @@
    - Containerize the application using Docker.
    - Deploy the application to Azure App Service or AKS.
    - Set up CI/CD pipelines for automated deployments.
+
+### Local Development Setup
+
+This project uses **Visual Studio User Secrets** for secure local development configuration instead of `.env` files.
+
+#### Quick Start with DevSetup CLI:
+```bash
+# Check your development environment status
+.\devsetup.bat status
+
+# Get help creating Azure DevOps PAT
+.\devsetup.bat login --organization your-ado-org
+
+# Configure your PAT after creating it
+.\devsetup.bat pat --token YOUR_PAT_TOKEN --organization your-ado-org
+```
+
+#### Manual Setup:
+1. **Clone the repository**
+2. **Configure secrets for both projects:**
+   ```bash
+   # TeamsBot secrets
+   cd TeamsBot
+   dotnet user-secrets set "AzureDevOps:PersonalAccessToken" "your-ado-pat"
+   dotnet user-secrets set "MicrosoftAppId" "your-bot-app-id"
+   
+   # McpServer secrets  
+   cd ../McpServer
+   dotnet user-secrets set "AzureDevOps:PersonalAccessToken" "your-ado-pat"
+   ```
+
+3. **See complete setup guide:** `docs/USER_SECRETS_SETUP.md`
+
+#### Benefits:
+- 🔐 **Secure**: Secrets encrypted and stored outside repository
+- 🎯 **Integrated**: Seamless .NET configuration system integration  
+- 🚫 **Safe**: No risk of accidentally committing secrets
+- 👥 **Isolated**: Per-user and per-machine secret isolation
+- 🛠️ **CLI Helper**: DevSetup CLI automates the authentication process
+
+#### CLI Documentation:
+See `DevSetupCli/README.md` for complete CLI usage guide.
+
+#### Migration from .env:
+If upgrading from a previous version, see `docs/USER_SECRETS_MIGRATION.md` for migration instructions.
 
 ### Example Code Snippets
 

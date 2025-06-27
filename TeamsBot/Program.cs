@@ -76,6 +76,7 @@ app.UseAuthorization();
 
 // Add health check endpoint
 app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/ready");
 
 app.MapControllers();
 

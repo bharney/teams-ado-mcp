@@ -1,0 +1,221 @@
+# Application deployment job template for Teams-Azure DevOps MCP project
+# This template deploys container applications to Azure Container Apps
+
+parameters:
+  - name: environment
+    type: string
+  - name: pool
+    type: object
+
+jobs:
+  - deployment: DeployApplications
+    displayName: 'Deploy Applications to ${{ parameters.environment }}'
+    pool: ${{ parameters.pool }}
+    environment: '${{ parameters.environment }}-applications'
+    
+    variables:
+      ob_outputDirectory: '$(Pipeline.Workspace)'
+      resourceGroupName: 'rg-teams-ado-mcp-${{ parameters.environment }}'
+    
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            # Download infrastructure outputs
+            - download: current
+              artifact: infrastructure-outputs
+              displayName: 'Download infrastructure outputs'
+            
+            # Load infrastructure outputs
+            - task: PowerShell@2
+              displayName: 'Load Infrastructure Outputs'
+              inputs:
+                targetType: 'inline'
+                script: |
+                  $outputsFile = "$(Pipeline.Workspace)/infrastructure-outputs/infrastructure-outputs.json"
+                  if (Test-Path $outputsFile) {
+                    $outputs = Get-Content $outputsFile | ConvertFrom-Json
+                    foreach ($property in $outputs.PSObject.Properties) {
+                      $name = $property.Name.ToUpper()
+                      $value = $property.Value
+                      Write-Host "##vso[task.setvariable variable=$name]$value"
+                      Write-Host "Loaded variable $name = $value"
+                    }
+                  } else {
+                    Write-Warning "Infrastructure outputs file not found"
+                  }
+                pwsh: true
+            
+            # Configure Azure DevOps PAT in Key Vault
+            - task: AzureCLI@2
+              displayName: 'Configure Azure DevOps PAT'
+              inputs:
+                azureSubscription: '$(azureServiceConnection)'
+                scriptType: 'bash'
+                scriptLocation: 'inlineScript'
+                inlineScript: |
+                  if [ ! -z "$(AZURE_DEVOPS_PAT)" ]; then
+                    echo "Setting Azure DevOps PAT in Key Vault"
+                    az keyvault secret set \
+                      --vault-name "$(KEY_VAULT_NAME)" \
+                      --name "azure-devops-pat" \
+                      --value "$(AZURE_DEVOPS_PAT)" \
+                      --only-show-errors
+                  else
+                    echo "Warning: AZURE_DEVOPS_PAT not provided"
+                  fi
+              condition: and(succeeded(), ne(variables['AZURE_DEVOPS_PAT'], ''))
+            
+            # Update MCP Server container app
+            - task: AzureCLI@2
+              displayName: 'Deploy MCP Server Container App'
+              inputs:
+                azureSubscription: '$(azureServiceConnection)'
+                scriptType: 'bash'
+                scriptLocation: 'inlineScript'
+                inlineScript: |
+                  echo "Updating MCP Server container app..."
+                  
+                  # Get current revision
+                  current_revision=$(az containerapp revision list \
+                    --name "$(MCP_SERVER_APP_NAME)" \
+                    --resource-group "$(resourceGroupName)" \
+                    --query "[0].name" -o tsv)
+                  
+                  echo "Current revision: $current_revision"
+                  
+                  # Update container app with new image
+                  az containerapp update \
+                    --name "$(MCP_SERVER_APP_NAME)" \
+                    --resource-group "$(resourceGroupName)" \
+                    --image "$(CONTAINER_REGISTRY_LOGIN_SERVER)/mcp-server:$(Build.BuildNumber)" \
+                    --revision-suffix "$(Build.BuildNumber)" \
+                    --set-env-vars \
+                      ASPNETCORE_ENVIRONMENT=Production \
+                      ASPNETCORE_URLS=http://+:5000 \
+                      KeyVault__VaultUri="$(KEY_VAULT_URI)" \
+                      AzureDevOps__UseKeyVault=true \
+                      AzureDevOps__KeyVaultSecretName=azure-devops-pat
+                  
+                  echo "MCP Server deployment completed"
+            
+            # Update Teams Bot container app
+            - task: AzureCLI@2
+              displayName: 'Deploy Teams Bot Container App'
+              inputs:
+                azureSubscription: '$(azureServiceConnection)'
+                scriptType: 'bash'
+                scriptLocation: 'inlineScript'
+                inlineScript: |
+                  echo "Updating Teams Bot container app..."
+                  
+                  # Get current revision
+                  current_revision=$(az containerapp revision list \
+                    --name "$(TEAMS_APP_NAME)" \
+                    --resource-group "$(resourceGroupName)" \
+                    --query "[0].name" -o tsv)
+                  
+                  echo "Current revision: $current_revision"
+                  
+                  # Update container app with new image
+                  az containerapp update \
+                    --name "$(TEAMS_APP_NAME)" \
+                    --resource-group "$(resourceGroupName)" \
+                    --image "$(CONTAINER_REGISTRY_LOGIN_SERVER)/teams-bot:$(Build.BuildNumber)" \
+                    --revision-suffix "$(Build.BuildNumber)" \
+                    --set-env-vars \
+                      ASPNETCORE_ENVIRONMENT=Production \
+                      ASPNETCORE_URLS=http://+:3978 \
+                      KeyVault__VaultUri="$(KEY_VAULT_URI)" \
+                      McpServer__BaseUrl="https://$(MCP_SERVER_APP_FQDN)"
+                  
+                  echo "Teams Bot deployment completed"
+            
+            # Health check - MCP Server
+            - task: PowerShell@2
+              displayName: 'Health Check - MCP Server'
+              inputs:
+                targetType: 'inline'
+                script: |
+                  $maxAttempts = 10
+                  $attempt = 1
+                  $healthUrl = "https://$(MCP_SERVER_APP_FQDN)/health"
+                  
+                  do {
+                    try {
+                      Write-Host "Health check attempt $attempt of $maxAttempts for MCP Server"
+                      $response = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -TimeoutSec 30
+                      if ($response.StatusCode -eq 200) {
+                        Write-Host "✓ MCP Server health check passed"
+                        break
+                      }
+                    }
+                    catch {
+                      Write-Host "Health check failed: $($_.Exception.Message)"
+                    }
+                    
+                    if ($attempt -eq $maxAttempts) {
+                      Write-Error "MCP Server health check failed after $maxAttempts attempts"
+                      exit 1
+                    }
+                    
+                    $attempt++
+                    Start-Sleep -Seconds 30
+                  } while ($attempt -le $maxAttempts)
+                pwsh: true
+            
+            # Health check - Teams Bot
+            - task: PowerShell@2
+              displayName: 'Health Check - Teams Bot'
+              inputs:
+                targetType: 'inline'
+                script: |
+                  $maxAttempts = 10
+                  $attempt = 1
+                  $healthUrl = "https://$(TEAMS_APP_FQDN)/health"
+                  
+                  do {
+                    try {
+                      Write-Host "Health check attempt $attempt of $maxAttempts for Teams Bot"
+                      $response = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -TimeoutSec 30
+                      if ($response.StatusCode -eq 200) {
+                        Write-Host "✓ Teams Bot health check passed"
+                        break
+                      }
+                    }
+                    catch {
+                      Write-Host "Health check failed: $($_.Exception.Message)"
+                    }
+                    
+                    if ($attempt -eq $maxAttempts) {
+                      Write-Error "Teams Bot health check failed after $maxAttempts attempts"
+                      exit 1
+                    }
+                    
+                    $attempt++
+                    Start-Sleep -Seconds 30
+                  } while ($attempt -le $maxAttempts)
+                pwsh: true
+            
+            # Display deployment summary
+            - task: PowerShell@2
+              displayName: 'Deployment Summary'
+              inputs:
+                targetType: 'inline'
+                script: |
+                  Write-Host "🎉 Deployment completed successfully!" -ForegroundColor Green
+                  Write-Host ""
+                  Write-Host "📋 Deployment Summary:" -ForegroundColor Cyan
+                  Write-Host "  Environment: ${{ parameters.environment }}"
+                  Write-Host "  Build Number: $(Build.BuildNumber)"
+                  Write-Host "  Resource Group: $(resourceGroupName)"
+                  Write-Host ""
+                  Write-Host "🔗 Application URLs:" -ForegroundColor Cyan
+                  Write-Host "  MCP Server: https://$(MCP_SERVER_APP_FQDN)"
+                  Write-Host "  Teams Bot: https://$(TEAMS_APP_FQDN)"
+                  Write-Host ""
+                  Write-Host "🔐 Azure Resources:" -ForegroundColor Cyan
+                  Write-Host "  Container Registry: $(CONTAINER_REGISTRY_NAME)"
+                  Write-Host "  Key Vault: $(KEY_VAULT_NAME)"
+                  Write-Host "  Log Analytics: $(LOG_ANALYTICS_WORKSPACE_NAME)"
+                pwsh: true
