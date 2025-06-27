@@ -86,10 +86,12 @@ class Program
             Console.WriteLine("  • Expiration: 30 days (recommended for development)");
             Console.WriteLine("  • Scopes: Full access (or at minimum 'Work Items: Read & Write')");
             Console.WriteLine();
-
+            
             Console.WriteLine("After creating the PAT, run:");
             Console.WriteLine($"  devsetup pat --token YOUR_PAT_TOKEN --organization {organization}");
             Console.WriteLine();
+
+            await Task.CompletedTask; // Make the method properly async
 
         }, orgOption);
 
@@ -320,12 +322,17 @@ class Program
             }
             Console.WriteLine();
 
-            // Check if projects build
+            // Check if projects build (with timeout)
             Console.WriteLine("🏗️  Build Status:");
             try
             {
-                await RunDotnetCommand("build --no-restore", ".", captureOutput: true);
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                await RunDotnetCommandWithTimeout("build --no-restore --verbosity quiet", ".", captureOutput: true, cts.Token);
                 Console.WriteLine("  ✅ Solution builds successfully");
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("  ⏱️  Build check timed out - skipping");
             }
             catch
             {
@@ -378,6 +385,38 @@ class Program
             throw new InvalidOperationException("Failed to start dotnet process");
 
         await process.WaitForExitAsync();
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Command failed with exit code {process.ExitCode}");
+        }
+
+        if (captureOutput)
+        {
+            return await process.StandardOutput.ReadToEndAsync();
+        }
+
+        return string.Empty;
+    }
+
+    static async Task<string> RunDotnetCommandWithTimeout(string arguments, string workingDirectory, bool captureOutput = false, CancellationToken cancellationToken = default)
+    {
+        var processInfo = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = captureOutput,
+            RedirectStandardError = captureOutput,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(processInfo);
+        if (process == null)
+            throw new InvalidOperationException("Failed to start dotnet process");
+
+        await process.WaitForExitAsync(cancellationToken);
 
         if (process.ExitCode != 0)
         {

@@ -14,12 +14,6 @@
     "mcpServerAppName": {
       "value": "mcp-server"
     },
-    "mcpServerImage": {
-      "value": "${SERVICE_MCP_SERVER_IMAGE_NAME}"
-    },
-    "teamsAppImage": {
-      "value": "${SERVICE_TEAMS_BOT_IMAGE_NAME}"
-    },
     "logRetentionInDays": {
       "value": 30
     },

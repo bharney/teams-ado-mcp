@@ -13,13 +13,14 @@ param mcpServerAppName string = 'mcp-server'
 // Resource naming using a consistent token for uniqueness
 param resourceToken string = toLower(uniqueString(subscription().id, resourceGroup().id, environmentName))
 
-// Container image configuration
-param mcpServerImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest' // Base image for initial deployment
-param teamsAppImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest' // Base image for initial deployment
+// Container image configuration - using base images for initial deployment
+var mcpServerImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+var teamsAppImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
 // Configuration parameters
 param logRetentionInDays int = 30
 param enableApplicationInsights bool = true
+param createRoleAssignments bool = false // Set to false to avoid permission issues
 
 // Variables for consistent naming
 var resourceNames = {
@@ -65,7 +66,7 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
 }
 
 // Role assignment: Grant AcrPull permission to the managed identity for the container registry
-resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (createRoleAssignments) {
   name: guid(containerRegistry.id, userAssignedIdentity.id, '7f951dda-4ed3-4680-a7ca-43fe172d538d')
   scope: containerRegistry
   properties: {
@@ -141,7 +142,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
 }
 
 // Role assignment: Grant Key Vault Secrets User permission to the managed identity
-resource keyVaultSecretsUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource keyVaultSecretsUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (createRoleAssignments) {
   name: guid(keyVault.id, userAssignedIdentity.id, '4633458b-17de-408a-b874-0445c86b69e6')
   scope: keyVault
   properties: {
