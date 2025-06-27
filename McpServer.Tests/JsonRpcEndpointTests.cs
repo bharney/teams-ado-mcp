@@ -137,9 +137,14 @@ public class JsonRpcEndpointTests : IClassFixture<WebApplicationFactory<Program>
         jsonResponse!.Result.Should().NotBeNull();
         jsonResponse.Error.Should().BeNull();
         
-        // Result should be an array of tool definitions
+        // Result should be an object with a tools array
         var resultJson = JsonSerializer.Serialize(jsonResponse.Result);
-        var tools = JsonSerializer.Deserialize<object[]>(resultJson);
+        var resultObj = JsonSerializer.Deserialize<Dictionary<string, object>>(resultJson);
+        resultObj.Should().NotBeNull();
+        resultObj!.Should().ContainKey("tools");
+        
+        var toolsJson = JsonSerializer.Serialize(resultObj["tools"]);
+        var tools = JsonSerializer.Deserialize<object[]>(toolsJson);
         tools.Should().NotBeNull();
         tools!.Length.Should().BeGreaterThanOrEqualTo(0);
     }

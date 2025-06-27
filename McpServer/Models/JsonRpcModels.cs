@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace McpServer.Models;
@@ -73,6 +74,58 @@ public record McpToolParameters
             return typedValue;
         }
         return default;
+    }
+
+    public T GetValue<T>(string key, bool required = true)
+    {
+        if (!_parameters.TryGetValue(key, out var value))
+        {
+            if (required)
+                throw new McpToolException($"Required parameter '{key}' not provided");
+            return default(T)!;
+        }
+
+        // Handle direct type match first
+        if (value is T typedValue)
+        {
+            return typedValue;
+        }
+
+        // Handle JsonElement conversion for JSON deserialization scenarios
+        if (value is JsonElement jsonElement)
+        {
+            try
+            {
+                if (typeof(T) == typeof(string))
+                {
+                    return (T)(object)jsonElement.GetString()!;
+                }
+                if (typeof(T) == typeof(int))
+                {
+                    return (T)(object)jsonElement.GetInt32();
+                }
+                if (typeof(T) == typeof(bool))
+                {
+                    return (T)(object)jsonElement.GetBoolean();
+                }
+                if (typeof(T) == typeof(double))
+                {
+                    return (T)(object)jsonElement.GetDouble();
+                }
+                // Add more type conversions as needed
+            }
+            catch (Exception ex)
+            {
+                if (required)
+                    throw new McpToolException($"Parameter '{key}' cannot be converted to type {typeof(T).Name}: {ex.Message}");
+                return default(T)!;
+            }
+        }
+
+        if (required)
+            throw new McpToolException($"Parameter '{key}' is not of expected type {typeof(T).Name}");
+        
+        return default(T)!;
     }
 
     public bool TryGetValue<T>(string key, out T? value)

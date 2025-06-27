@@ -107,20 +107,22 @@ public class McpController : ControllerBase
         }
     }
 
-    private async Task<JsonRpcResponse> HandleToolsListAsync(JsonRpcRequest request)
+    private Task<JsonRpcResponse> HandleToolsListAsync(JsonRpcRequest request)
     {
         var tools = _toolRegistry.GetAllTools();
         var toolList = tools.Select(tool => new
         {
             name = tool.Name,
-            // Add other tool metadata as needed
+            description = $"Creates a work item in Azure DevOps" // TODO: Get from tool metadata
         }).ToArray();
 
-        return new JsonRpcResponse
+        var response = new JsonRpcResponse
         {
-            Result = toolList,
+            Result = new { tools = toolList },
             Id = request.Id
         };
+        
+        return Task.FromResult(response);
     }
 
     private async Task<JsonRpcResponse> HandleToolCallAsync(JsonRpcRequest request)
@@ -159,6 +161,19 @@ public class McpController : ControllerBase
             }
 
             var toolName = toolNameObj.ToString();
+            if (string.IsNullOrEmpty(toolName))
+            {
+                return new JsonRpcResponse
+                {
+                    Error = new JsonRpcError
+                    {
+                        Code = -32602,
+                        Message = "Invalid params: tool name cannot be empty"
+                    },
+                    Id = request.Id
+                };
+            }
+            
             var tool = _toolRegistry.GetTool(toolName);
             
             if (tool == null)
@@ -197,7 +212,7 @@ public class McpController : ControllerBase
             {
                 return new JsonRpcResponse
                 {
-                    Result = result.Data,
+                    Result = result, // Return the full McpToolResult, not just result.Data
                     Id = request.Id
                 };
             }
@@ -213,6 +228,21 @@ public class McpController : ControllerBase
                     Id = request.Id
                 };
             }
+        }
+        catch (McpToolException ex)
+        {
+            // Propagate tool-specific errors with their original message
+            _logger.LogWarning(ex, "Tool execution error: {ErrorMessage}", ex.Message);
+            
+            return new JsonRpcResponse
+            {
+                Error = new JsonRpcError
+                {
+                    Code = -32602, // Invalid params for parameter validation errors
+                    Message = ex.Message
+                },
+                Id = request.Id
+            };
         }
         catch (Exception ex)
         {
