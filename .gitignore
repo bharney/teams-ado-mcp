@@ -48,7 +48,103 @@ CodeCoverage/
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
 
-# NUnit
-*.VisualState.xml
-TestResult.xml
-nunit-*.xml
+# Visual Studio files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.history/
+
+# Teams Bot specific
+.publish/
+*.zip
+.bot
+
+# Azure specific
+.azure/
+*.azurePubxml
+*.pubxml
+*.publishproj
+PublishScripts/
+
+# Azure Functions
+__blobstorage__/
+__queuestorage__/
+__azurite_db*__.json
+.azure-functions-core-tools/
+
+# Environment variables and secrets
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+secrets/
+*.key
+*.pem
+*.p12
+*.p8
+
+# Configuration files with sensitive data
+appsettings.Production.json
+appsettings.Staging.json
+!appsettings.json
+!appsettings.Development.json
+
+# Docker
+.dockerignore
+Dockerfile*
+docker-compose*
+
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+.terraform.lock.hcl
+
+# Helm
+charts/*.tgz
+
+# Application Insights
+ApplicationInsights.config
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Coverage reports
+coverage/
+*.lcov
+.nyc_output
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Temporary folders
+tmp/
+temp/
+
+# User-specific files
+*.rsuser
+*.userprefs
+
+# JetBrains Rider
+*.sln.iml
+.idea/
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
