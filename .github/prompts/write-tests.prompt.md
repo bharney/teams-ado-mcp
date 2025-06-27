@@ -1,0 +1,1 @@
+How can I write unit tests for this C# code? Focus on writing unit tests for code that can be tested in isolation. Use integration tests for larger methods and API controllers/endpoints to test interactions between components. Always use dependency injection for services and helpers. Use the Arrange-Act-Assert pattern for organizing tests.

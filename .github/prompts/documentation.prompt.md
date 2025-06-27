@@ -1,0 +1,1 @@
+Add comments and documentation to the code. Focus on small comments that help the reader understand the flow of the code; Number the general step that the code is doing. Add documentation to the methods and classes describing what the function does, its parameters, and its output.

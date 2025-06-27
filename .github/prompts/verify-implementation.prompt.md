@@ -1,0 +1,1 @@
+Read the comments and try to identify if the code is implemented correctly. Don't focus on edge cases; instead, look for potential logical errors or conditions in this code that could lead to problems.
