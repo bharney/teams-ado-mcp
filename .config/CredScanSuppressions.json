@@ -1,0 +1,25 @@
+{
+  "tool": "credscan",
+  "suppressions": [
+    {
+      "file": "azure.yaml",
+      "justification": "Template file with placeholder values"
+    },
+    {
+      "file": "main.parameters.json",
+      "justification": "Parameter template file with environment variable references"
+    },
+    {
+      "file": ".env.template",
+      "justification": "Environment template file with placeholder values"
+    },
+    {
+      "file": "appsettings.json",
+      "justification": "Configuration template with no actual secrets"
+    },
+    {
+      "file": "appsettings.Development.json",
+      "justification": "Development configuration template with no actual secrets"
+    }
+  ]
+}

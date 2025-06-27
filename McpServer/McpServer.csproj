@@ -4,13 +4,30 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>aspnet-McpServer-a7d438ef-bfc6-49c5-97ce-8a8bb93f7788</UserSecretsId>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Identity" Version="1.13.1" />
+    <!-- ASP.NET Core Dependencies -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.17" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.17" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    
+    <!-- Azure SDK Dependencies for SFI-compliant authentication -->
+    <PackageReference Include="Azure.Identity" Version="1.12.1" />
+    <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.7.0" />
+    
+    <!-- HTTP and JSON processing -->
+    <PackageReference Include="System.Text.Json" Version="8.0.17" />
+    
+    <!-- Health checks -->
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="8.0.17" />
+    
+    <!-- Configuration and User Secrets -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.17" />
+    
+    <!-- Development Tools -->
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.22.1-Preview.1" />
   </ItemGroup>
 
 </Project>

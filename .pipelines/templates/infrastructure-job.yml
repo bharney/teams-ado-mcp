@@ -1,0 +1,131 @@
+# Infrastructure deployment job template for Teams-Azure DevOps MCP project
+# This template deploys Azure infrastructure using Bicep templates
+
+parameters:
+  - name: environment
+    type: string
+  - name: pool
+    type: object
+
+jobs:
+  - deployment: DeployInfrastructure
+    displayName: 'Deploy Infrastructure to ${{ parameters.environment }}'
+    pool: ${{ parameters.pool }}
+    environment: '${{ parameters.environment }}-infrastructure'
+    
+    variables:
+      ob_outputDirectory: '$(Pipeline.Workspace)'
+      resourceGroupName: 'rg-teams-ado-mcp-${{ parameters.environment }}'
+      deploymentName: 'teams-ado-mcp-${{ parameters.environment }}-$(Build.BuildNumber)'
+    
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            # Download build artifacts
+            - download: current
+              artifact: drop
+              displayName: 'Download build artifacts'
+            
+            # Azure CLI task to deploy infrastructure
+            - task: AzureCLI@2
+              displayName: 'Create Resource Group'
+              inputs:
+                azureSubscription: '$(azureServiceConnection)'
+                scriptType: 'bash'
+                scriptLocation: 'inlineScript'
+                inlineScript: |
+                  az group create \
+                    --name $(resourceGroupName) \
+                    --location $(location) \
+                    --tags environment=${{ parameters.environment }} project=teams-ado-mcp
+            
+            # Validate Bicep template
+            - task: AzureCLI@2
+              displayName: 'Validate Bicep Template'
+              inputs:
+                azureSubscription: '$(azureServiceConnection)'
+                scriptType: 'bash'
+                scriptLocation: 'inlineScript'
+                inlineScript: |
+                  az deployment group validate \
+                    --resource-group $(resourceGroupName) \
+                    --template-file $(Pipeline.Workspace)/drop/infra/main.bicep \
+                    --parameters $(Pipeline.Workspace)/drop/infra/main.parameters.json \
+                    --parameters environmentName=${{ parameters.environment }} \
+                    --parameters location=$(location) \
+                    --verbose
+            
+            # What-if deployment
+            - task: AzureCLI@2
+              displayName: 'What-if Deployment'
+              inputs:
+                azureSubscription: '$(azureServiceConnection)'
+                scriptType: 'bash'
+                scriptLocation: 'inlineScript'
+                inlineScript: |
+                  az deployment group what-if \
+                    --resource-group $(resourceGroupName) \
+                    --template-file $(Pipeline.Workspace)/drop/infra/main.bicep \
+                    --parameters $(Pipeline.Workspace)/drop/infra/main.parameters.json \
+                    --parameters environmentName=${{ parameters.environment }} \
+                    --parameters location=$(location)
+            
+            # Deploy infrastructure
+            - task: AzureResourceManagerTemplateDeployment@3
+              displayName: 'Deploy Bicep Template'
+              inputs:
+                deploymentScope: 'Resource Group'
+                azureResourceManagerConnection: '$(azureServiceConnection)'
+                subscriptionId: '$(azureSubscription)'
+                action: 'Create Or Update Resource Group'
+                resourceGroupName: '$(resourceGroupName)'
+                location: '$(location)'
+                templateLocation: 'Linked artifact'
+                csmFile: '$(Pipeline.Workspace)/drop/infra/main.bicep'
+                csmParametersFile: '$(Pipeline.Workspace)/drop/infra/main.parameters.json'
+                overrideParameters: |
+                  -environmentName "${{ parameters.environment }}"
+                  -location "$(location)"
+                deploymentMode: 'Incremental'
+                deploymentName: '$(deploymentName)'
+                deploymentOutputs: 'infrastructureOutputs'
+            
+            # Parse deployment outputs
+            - task: PowerShell@2
+              displayName: 'Parse Infrastructure Outputs'
+              inputs:
+                targetType: 'inline'
+                script: |
+                  $outputs = '$(infrastructureOutputs)' | ConvertFrom-Json
+                  foreach ($output in $outputs.PSObject.Properties) {
+                    $name = $output.Name.ToUpper()
+                    $value = $output.Value.value
+                    Write-Host "##vso[task.setvariable variable=$name;isOutput=true]$value"
+                    Write-Host "Setting variable $name = $value"
+                  }
+                pwsh: true
+            
+            # Store outputs for next stages
+            - task: PublishPipelineArtifact@1
+              displayName: 'Publish Infrastructure Outputs'
+              inputs:
+                targetPath: '$(Agent.TempDirectory)/infrastructure-outputs.json'
+                artifactName: 'infrastructure-outputs'
+                publishLocation: 'pipeline'
+              condition: succeededOrFailed()
+            
+            # Generate infrastructure outputs file
+            - task: PowerShell@2
+              displayName: 'Generate Infrastructure Outputs File'
+              inputs:
+                targetType: 'inline'
+                script: |
+                  $outputs = '$(infrastructureOutputs)' | ConvertFrom-Json
+                  $outputFile = @{}
+                  foreach ($output in $outputs.PSObject.Properties) {
+                    $outputFile[$output.Name] = $output.Value.value
+                  }
+                  $outputFile | ConvertTo-Json | Out-File -FilePath "$(Agent.TempDirectory)/infrastructure-outputs.json"
+                pwsh: true
+              condition: succeeded()
