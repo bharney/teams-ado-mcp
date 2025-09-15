@@ -16,7 +16,7 @@ namespace McpServer.Services;
 /// Azure DevOps service implementation using SFI-compliant federated identity
 /// Implements OptimizedAzureCredential for secure, credential-free Azure DevOps API access
 /// </summary>
-public class AzureDevOpsService : IAzureDevOpsService, IDisposable
+public class AzureDevOpsService : IAzureDevOpsService
 {
     private readonly ILogger<AzureDevOpsService> _logger;
     private readonly AzureDevOpsOptions _options;
@@ -24,7 +24,6 @@ public class AzureDevOpsService : IAzureDevOpsService, IDisposable
     private readonly TokenCredential _credential;
     private readonly SemaphoreSlim _authSemaphore;
     private readonly JsonSerializerOptions _jsonOptions;
-    private bool _disposed;
 
     /// <summary>
     /// Azure DevOps REST API scope for token requests
@@ -67,7 +66,7 @@ public class AzureDevOpsService : IAzureDevOpsService, IDisposable
 
     public async Task<WorkItemResult> CreateWorkItemAsync(WorkItemRequest request)
     {
-        ThrowIfDisposed();
+    // Service no longer disposable; previous disposal guard removed
         
         if (request == null)
             throw new ArgumentNullException(nameof(request));
@@ -137,7 +136,7 @@ public class AzureDevOpsService : IAzureDevOpsService, IDisposable
 
     public async Task<WorkItemResult> GetWorkItemAsync(int id)
     {
-        ThrowIfDisposed();
+    // Disposal guard removed
         
         _logger.LogInformation("Getting work item: {WorkItemId}", id);
 
@@ -173,7 +172,7 @@ public class AzureDevOpsService : IAzureDevOpsService, IDisposable
 
     public async Task<IEnumerable<WorkItemResult>> GetWorkItemsAsync(string? query = null)
     {
-        ThrowIfDisposed();
+    // Disposal guard removed
         
         _logger.LogInformation("Getting work items with query: {Query}", query ?? "none");
 
@@ -251,7 +250,7 @@ public class AzureDevOpsService : IAzureDevOpsService, IDisposable
 
     public async Task<WorkItemResult> UpdateWorkItemAsync(int id, WorkItemRequest request)
     {
-        ThrowIfDisposed();
+    // Disposal guard removed
         
         if (request == null)
             throw new ArgumentNullException(nameof(request));
@@ -400,6 +399,27 @@ public class AzureDevOpsService : IAzureDevOpsService, IDisposable
                 return; // Assume token is still valid - Azure.Identity handles refresh
             }
 
+            // Local development fallback: support Personal Access Token from options (User Secrets) or environment variable (NOT for production)
+            // Order of precedence:
+            // 1. _options.PersonalAccessToken (User Secrets)
+            // 2. AZDO_PAT environment variable
+            // 3. AZURE_DEVOPS_EXT_PAT environment variable
+            var pat = _options.PersonalAccessToken;
+            if (string.IsNullOrWhiteSpace(pat))
+            {
+                pat = Environment.GetEnvironmentVariable("AZDO_PAT")
+                      ?? Environment.GetEnvironmentVariable("AZURE_DEVOPS_EXT_PAT");
+            }
+            if (!string.IsNullOrWhiteSpace(pat))
+            {
+                // PAT basic auth: username can be anything non-empty; convention uses empty user or "pat"
+                var basic = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{pat}"));
+                _httpClient.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Basic", basic);
+                _logger.LogWarning("Using PAT authentication (development fallback). Source: {Source}", _options.PersonalAccessToken != null ? "UserSecrets" : "Environment");
+                return;
+            }
+
             _logger.LogDebug("Acquiring Azure DevOps access token using federated identity");
 
             var tokenRequest = new TokenRequestContext(new[] { AdoScope });
@@ -507,27 +527,5 @@ public class AzureDevOpsService : IAzureDevOpsService, IDisposable
         return default;
     }
 
-    /// <summary>
-    /// Disposes of resources used by the service
-    /// </summary>
-    public void Dispose()
-    {
-        if (!_disposed)
-        {
-            _authSemaphore?.Dispose();
-            _disposed = true;
-        }
-        GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// Throws if the service has been disposed
-    /// </summary>
-    private void ThrowIfDisposed()
-    {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(AzureDevOpsService));
-        }
-    }
+    // Disposal pattern removed to avoid premature disposal when tool instance is cached.
 }

@@ -45,4 +45,10 @@ public class AzureDevOpsOptions
     /// Initial delay for exponential backoff in milliseconds
     /// </summary>
     public int InitialRetryDelayMs { get; set; } = 1000;
+
+    /// <summary>
+    /// Optional Personal Access Token for local development fallback (NOT used in production). Leave empty in committed appsettings.
+    /// Bound via User Secrets if provided.
+    /// </summary>
+    public string? PersonalAccessToken { get; set; }
 }

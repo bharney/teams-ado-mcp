@@ -19,12 +19,9 @@ public static class EntryPoint
         builder.Services.AddHttpClient<McpServer.Services.AzureDevOpsService>();
         builder.Services.AddScoped<McpServer.Services.IAzureDevOpsService, McpServer.Services.AzureDevOpsService>();
 
-        // Tool registry and tools
-        builder.Services.AddSingleton<McpServer.Services.IMcpToolRegistry, McpServer.Services.McpToolRegistry>();
-        builder.Services.AddScoped<McpServer.Tools.CreateWorkItemTool>();
-
-        // Populate tool registry after DI container is built
-        builder.Services.AddTransient<IStartupFilter, ToolRegistryStartupFilter>();
+    // Tools registered as scoped (per-request) for fresh dependencies
+    builder.Services.AddScoped<McpServer.Tools.CreateWorkItemTool>();
+    builder.Services.AddScoped<McpServer.Services.IMcpTool, McpServer.Tools.CreateWorkItemTool>();
 
         var app = builder.Build();
 
