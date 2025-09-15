@@ -100,39 +100,44 @@ public class McpController : ControllerBase
                         return Ok(new JsonRpcResponse { Id = request.Id, Error = new JsonRpcError { Code = -32602, Message = "Tool name not provided" } });
                     }
                     var toolName = nameElement.GetString();
-                    IMcpTool? tool = null;
-                    if (toolName is not null)
+                    // Maintain scope for entire execution to avoid disposing scoped services (e.g., HttpClient handlers) prematurely
+                    using (var execScope = _serviceProvider.CreateScope())
                     {
-                        using var scope = _serviceProvider.CreateScope();
-                        tool = scope.ServiceProvider.GetServices<IMcpTool>().FirstOrDefault(t => t.Name.Equals(toolName, StringComparison.OrdinalIgnoreCase));
-                    }
-                    if (tool == null)
-                    {
-                        if (isNotification) return NoContent();
-                        return Ok(new JsonRpcResponse { Id = request.Id, Error = new JsonRpcError { Code = -32601, Message = $"Tool '{toolName}' not found" } });
-                    }
-
-                    var parameters = new McpToolParameters();
-                    if (rootElement.TryGetProperty("arguments", out var argsElement) && argsElement.ValueKind == JsonValueKind.Object)
-                    {
-                        foreach (var prop in argsElement.EnumerateObject())
+                        IMcpTool? tool = null;
+                        if (toolName is not null)
                         {
-                            parameters.Add(prop.Name, prop.Value);
+                            tool = execScope.ServiceProvider
+                                .GetServices<IMcpTool>()
+                                .FirstOrDefault(t => t.Name.Equals(toolName, StringComparison.OrdinalIgnoreCase));
                         }
-                    }
+                        if (tool == null)
+                        {
+                            if (isNotification) return NoContent();
+                            return Ok(new JsonRpcResponse { Id = request.Id, Error = new JsonRpcError { Code = -32601, Message = $"Tool '{toolName}' not found" } });
+                        }
 
-                    try
-                    {
-                        var result = await tool.ExecuteAsync(parameters);
-                        if (isNotification) return NoContent();
-                        if (result.Success)
-                            return Ok(new JsonRpcResponse { Id = request.Id, Result = new { success = true, data = result.Data } });
-                        return Ok(new JsonRpcResponse { Id = request.Id, Result = new { success = false, error = result.ErrorMessage, code = result.ErrorCode } });
-                    }
-                    catch (McpToolException ex)
-                    {
-                        if (isNotification) return NoContent();
-                        return Ok(new JsonRpcResponse { Id = request.Id, Error = new JsonRpcError { Code = -32602, Message = ex.Message } });
+                        var parameters = new McpToolParameters();
+                        if (rootElement.TryGetProperty("arguments", out var argsElement) && argsElement.ValueKind == JsonValueKind.Object)
+                        {
+                            foreach (var prop in argsElement.EnumerateObject())
+                            {
+                                parameters.Add(prop.Name, prop.Value);
+                            }
+                        }
+
+                        try
+                        {
+                            var result = await tool.ExecuteAsync(parameters);
+                            if (isNotification) return NoContent();
+                            if (result.Success)
+                                return Ok(new JsonRpcResponse { Id = request.Id, Result = new { success = true, data = result.Data } });
+                            return Ok(new JsonRpcResponse { Id = request.Id, Result = new { success = false, error = result.ErrorMessage, code = result.ErrorCode } });
+                        }
+                        catch (McpToolException ex)
+                        {
+                            if (isNotification) return NoContent();
+                            return Ok(new JsonRpcResponse { Id = request.Id, Error = new JsonRpcError { Code = -32602, Message = ex.Message } });
+                        }
                     }
 
                 default:

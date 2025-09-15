@@ -399,6 +399,27 @@ public class AzureDevOpsService : IAzureDevOpsService
                 return; // Assume token is still valid - Azure.Identity handles refresh
             }
 
+            // Local development fallback: support Personal Access Token from options (User Secrets) or environment variable (NOT for production)
+            // Order of precedence:
+            // 1. _options.PersonalAccessToken (User Secrets)
+            // 2. AZDO_PAT environment variable
+            // 3. AZURE_DEVOPS_EXT_PAT environment variable
+            var pat = _options.PersonalAccessToken;
+            if (string.IsNullOrWhiteSpace(pat))
+            {
+                pat = Environment.GetEnvironmentVariable("AZDO_PAT")
+                      ?? Environment.GetEnvironmentVariable("AZURE_DEVOPS_EXT_PAT");
+            }
+            if (!string.IsNullOrWhiteSpace(pat))
+            {
+                // PAT basic auth: username can be anything non-empty; convention uses empty user or "pat"
+                var basic = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{pat}"));
+                _httpClient.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Basic", basic);
+                _logger.LogWarning("Using PAT authentication (development fallback). Source: {Source}", _options.PersonalAccessToken != null ? "UserSecrets" : "Environment");
+                return;
+            }
+
             _logger.LogDebug("Acquiring Azure DevOps access token using federated identity");
 
             var tokenRequest = new TokenRequestContext(new[] { AdoScope });
