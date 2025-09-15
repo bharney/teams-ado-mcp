@@ -111,8 +111,9 @@ public class AzureDevOpsService : IAzureDevOpsService
             var response = await ExecuteWithRetryAsync(async () =>
             {
                 // IMPORTANT: Do NOT prefix with leading '/' or HttpClient will drop the organization path segment in BaseAddress
+                _logger.LogDebug("CreateWorkItem BaseUrl={BaseUrl} Project={Project} Type={Type}", _options.BaseUrl, _options.Project, request.WorkItemType);
                 var url = $"{_options.BaseUrl}/{_options.Project}/_apis/wit/workitems/${request.WorkItemType}?api-version={_options.ApiVersion}";
-                _logger.LogDebug("POST work item URL: {Url}", url);
+                _logger.LogDebug("POST work item URL (absolute): {Url}", url);
                 var json = JsonSerializer.Serialize(patchDocument, _jsonOptions);
                 var content = new StringContent(json, Encoding.UTF8, "application/json-patch+json");
 
