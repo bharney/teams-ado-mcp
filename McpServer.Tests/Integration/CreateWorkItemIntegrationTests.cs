@@ -8,6 +8,9 @@ using McpServer.Models;
 using McpServer.Services;
 using Moq;
 using Microsoft.AspNetCore.Hosting;
+using Xunit;
+using Microsoft.VisualStudio.TestPlatform.TestHost;
+using System.IO;
 
 namespace McpServer.Tests.Integration;
 
@@ -26,6 +29,9 @@ public class CreateWorkItemIntegrationTests : IClassFixture<CreateWorkItemIntegr
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            // Ensure the content root is the McpServer project directory so deps file is found
+            var projectDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "McpServer"));
+            builder.UseContentRoot(projectDir);
             builder.ConfigureServices(services =>
             {
                 // Remove the real Azure DevOps service

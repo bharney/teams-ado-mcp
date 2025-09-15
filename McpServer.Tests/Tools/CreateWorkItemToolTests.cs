@@ -5,6 +5,7 @@ using System.Text.Json;
 using McpServer.Models;
 using McpServer.Services;
 using McpServer.Tools;
+using Xunit;
 
 namespace McpServer.Tests.Tools;
 
