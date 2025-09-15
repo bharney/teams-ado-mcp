@@ -2,6 +2,7 @@ using FluentAssertions;
 using McpServer.Models;
 using McpServer.Services;
 using Moq;
+using Xunit;
 
 namespace McpServer.Tests.Services;
 

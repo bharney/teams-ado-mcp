@@ -13,6 +13,11 @@ public interface IMcpTool
     string Name { get; }
 
     /// <summary>
+    /// Human readable description of the tool
+    /// </summary>
+    string Description { get; }
+
+    /// <summary>
     /// Execute the tool with the provided parameters
     /// </summary>
     /// <param name="parameters">Tool execution parameters</param>

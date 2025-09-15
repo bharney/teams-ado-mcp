@@ -1,8 +1,10 @@
 using FluentAssertions;
 using McpServer.Models;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.VisualStudio.TestPlatform.TestHost;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Xunit;
 
 namespace McpServer.Tests;
 
