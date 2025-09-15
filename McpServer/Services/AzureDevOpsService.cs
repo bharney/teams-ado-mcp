@@ -56,9 +56,15 @@ public class AzureDevOpsService : IAzureDevOpsService
         };
 
         // Configure HTTP client
-        _httpClient.BaseAddress = new Uri(_options.BaseUrl);
+    // Ensure BaseAddress has trailing slash for safe relative resolution (though we will use absolute URLs below)
+    var baseUrl = _options.BaseUrl.EndsWith('/') ? _options.BaseUrl : _options.BaseUrl + "/";
+    _httpClient.BaseAddress = new Uri(baseUrl);
         _httpClient.Timeout = TimeSpan.FromSeconds(_options.RequestTimeoutSeconds);
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "McpServer/1.0");
+        if (!_httpClient.DefaultRequestHeaders.Accept.Any(a => a.MediaType == "application/json"))
+        {
+            _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        }
         
         _logger.LogInformation("Initialized Azure DevOps service for organization: {Organization}, project: {Project}", 
             _options.Organization, _options.Project);
@@ -79,9 +85,8 @@ public class AzureDevOpsService : IAzureDevOpsService
             var patchDocument = new List<AdoWorkItemCreateRequest>
             {
                 new() { Path = "/fields/System.Title", Value = request.Title },
-                new() { Path = "/fields/System.Description", Value = request.Description ?? string.Empty },
-                new() { Path = "/fields/System.WorkItemType", Value = request.WorkItemType }
-            };
+                new() { Path = "/fields/System.Description", Value = request.Description ?? string.Empty }
+            }; // Work item type provided via URL ($TYPE) – no need to patch System.WorkItemType
 
             // Add optional fields if provided
             if (!string.IsNullOrEmpty(request.Priority))
@@ -105,11 +110,20 @@ public class AzureDevOpsService : IAzureDevOpsService
             // Execute the API call with retry logic
             var response = await ExecuteWithRetryAsync(async () =>
             {
-                var url = $"/{_options.Project}/_apis/wit/workitems/${request.WorkItemType}?api-version={_options.ApiVersion}";
+                // IMPORTANT: Do NOT prefix with leading '/' or HttpClient will drop the organization path segment in BaseAddress
+                var url = $"{_options.BaseUrl}/{_options.Project}/_apis/wit/workitems/${request.WorkItemType}?api-version={_options.ApiVersion}";
+                _logger.LogDebug("POST work item URL: {Url}", url);
                 var json = JsonSerializer.Serialize(patchDocument, _jsonOptions);
                 var content = new StringContent(json, Encoding.UTF8, "application/json-patch+json");
 
-                return await _httpClient.PostAsync(url, content);
+                var httpResponse = await _httpClient.PostAsync(url, content);
+                if (httpResponse.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    _logger.LogWarning("Create work item received 401. Auth header present: {HasAuth}. Using PAT: {UsingPat}",
+                        _httpClient.DefaultRequestHeaders.Authorization != null,
+                        _httpClient.DefaultRequestHeaders.Authorization?.Scheme == "Basic");
+                }
+                return httpResponse;
             });
 
             var responseContent = await response.Content.ReadAsStringAsync();
@@ -144,8 +158,16 @@ public class AzureDevOpsService : IAzureDevOpsService
         {
             var response = await ExecuteWithRetryAsync(async () =>
             {
-                var url = $"/{_options.Project}/_apis/wit/workitems/{id}?api-version={_options.ApiVersion}";
-                return await _httpClient.GetAsync(url);
+                var url = $"{_options.BaseUrl}/{_options.Project}/_apis/wit/workitems/{id}?api-version={_options.ApiVersion}";
+                _logger.LogDebug("GET work item URL: {Url}", url);
+                var httpResponse = await _httpClient.GetAsync(url);
+                if (httpResponse.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    _logger.LogWarning("Get work item received 401. Auth header present: {HasAuth}. Scheme: {Scheme}",
+                        _httpClient.DefaultRequestHeaders.Authorization != null,
+                        _httpClient.DefaultRequestHeaders.Authorization?.Scheme);
+                }
+                return httpResponse;
             });
 
             var responseContent = await response.Content.ReadAsStringAsync();
@@ -184,12 +206,20 @@ public class AzureDevOpsService : IAzureDevOpsService
             // Execute WIQL query first to get work item IDs
             var queryResponse = await ExecuteWithRetryAsync(async () =>
             {
-                var url = $"/{_options.Project}/_apis/wit/wiql?api-version={_options.ApiVersion}";
+                var url = $"{_options.BaseUrl}/{_options.Project}/_apis/wit/wiql?api-version={_options.ApiVersion}";
+                _logger.LogDebug("POST WIQL URL: {Url}", url);
                 var queryRequest = new { query = wiqlQuery };
                 var json = JsonSerializer.Serialize(queryRequest, _jsonOptions);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                return await _httpClient.PostAsync(url, content);
+                var httpResponse = await _httpClient.PostAsync(url, content);
+                if (httpResponse.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    _logger.LogWarning("WIQL query received 401. Auth header present: {HasAuth}. Scheme: {Scheme}",
+                        _httpClient.DefaultRequestHeaders.Authorization != null,
+                        _httpClient.DefaultRequestHeaders.Authorization?.Scheme);
+                }
+                return httpResponse;
             });
 
             var queryContent = await queryResponse.Content.ReadAsStringAsync();
@@ -214,8 +244,16 @@ public class AzureDevOpsService : IAzureDevOpsService
 
             var detailsResponse = await ExecuteWithRetryAsync(async () =>
             {
-                var url = $"/{_options.Project}/_apis/wit/workitems?ids={idsParam}&api-version={_options.ApiVersion}";
-                return await _httpClient.GetAsync(url);
+                var url = $"{_options.BaseUrl}/{_options.Project}/_apis/wit/workitems?ids={idsParam}&api-version={_options.ApiVersion}";
+                _logger.LogDebug("GET work items batch URL: {Url}", url);
+                var httpResponse = await _httpClient.GetAsync(url);
+                if (httpResponse.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    _logger.LogWarning("Get work item details received 401. Auth header present: {HasAuth}. Scheme: {Scheme}",
+                        _httpClient.DefaultRequestHeaders.Authorization != null,
+                        _httpClient.DefaultRequestHeaders.Authorization?.Scheme);
+                }
+                return httpResponse;
             });
 
             var detailsContent = await detailsResponse.Content.ReadAsStringAsync();
@@ -298,11 +336,19 @@ public class AzureDevOpsService : IAzureDevOpsService
             // Execute the API call with retry logic
             var response = await ExecuteWithRetryAsync(async () =>
             {
-                var url = $"/{_options.Project}/_apis/wit/workitems/{id}?api-version={_options.ApiVersion}";
+                var url = $"{_options.BaseUrl}/{_options.Project}/_apis/wit/workitems/{id}?api-version={_options.ApiVersion}";
+                _logger.LogDebug("PATCH work item URL: {Url}", url);
                 var json = JsonSerializer.Serialize(patchDocument, _jsonOptions);
                 var content = new StringContent(json, Encoding.UTF8, "application/json-patch+json");
 
-                return await _httpClient.PatchAsync(url, content);
+                var httpResponse = await _httpClient.PatchAsync(url, content);
+                if (httpResponse.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    _logger.LogWarning("Update work item received 401. Auth header present: {HasAuth}. Scheme: {Scheme}",
+                        _httpClient.DefaultRequestHeaders.Authorization != null,
+                        _httpClient.DefaultRequestHeaders.Authorization?.Scheme);
+                }
+                return httpResponse;
             });
 
             var responseContent = await response.Content.ReadAsStringAsync();
