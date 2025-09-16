@@ -22,6 +22,25 @@ builder.Services.AddSecureConfiguration();
 builder.Services.Configure<McpServer.Configuration.AzureDevOpsOptions>(
     builder.Configuration.GetSection(McpServer.Configuration.AzureDevOpsOptions.SectionName));
 
+// Bind Azure OpenAI options (optional enablement)
+builder.Services.Configure<TeamsBot.Configuration.AzureOpenAIOptions>(
+    builder.Configuration.GetSection(TeamsBot.Configuration.AzureOpenAIOptions.SectionName));
+
+// Register Azure OpenAI client (uses DefaultAzureCredential) if endpoint configured
+builder.Services.AddSingleton<IAzureOpenAIClient>(sp =>
+{
+    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TeamsBot.Configuration.AzureOpenAIOptions>>().Value;
+    var cred = sp.GetRequiredService<DefaultAzureCredential>();
+    if (string.IsNullOrWhiteSpace(opts.Endpoint) || !opts.Enabled)
+    {
+        return null!; // DI will pass null to optional parameter (handled in service constructor)
+    }
+    return new AzureOpenAIClient(
+        sp.GetRequiredService<ILogger<AzureOpenAIClient>>(),
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TeamsBot.Configuration.AzureOpenAIOptions>>(),
+        cred);
+});
+
 // Bot Framework Authentication (standard)
 builder.Services.AddSingleton<BotFrameworkAuthentication, ConfigurationBotFrameworkAuthentication>();
 
