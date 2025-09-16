@@ -185,13 +185,13 @@ namespace TeamsBot.Tests.Handlers
     public class TeamsAIActivityHandlerIntegrationTests
     {
         private readonly Mock<ILogger<TeamsAIActivityHandler>> _mockLogger;
-        private readonly Mock<McpServer.Services.IAzureDevOpsService> _mockAzureDevOpsService;
+        private readonly Mock<IWorkItemCreationService> _mockWorkItemCreationService;
         private readonly Mock<IConversationIntelligenceService> _mockConversationIntelligence;
 
         public TeamsAIActivityHandlerIntegrationTests()
         {
             _mockLogger = new Mock<ILogger<TeamsAIActivityHandler>>();
-            _mockAzureDevOpsService = new Mock<McpServer.Services.IAzureDevOpsService>();
+            _mockWorkItemCreationService = new Mock<IWorkItemCreationService>();
             _mockConversationIntelligence = new Mock<IConversationIntelligenceService>();
         }
 
@@ -201,7 +201,7 @@ namespace TeamsBot.Tests.Handlers
             // Act & Assert - Constructor should work with valid dependencies
             var action = () => new TeamsAIActivityHandler(
                 _mockLogger.Object,
-                _mockAzureDevOpsService.Object,
+                _mockWorkItemCreationService.Object,
                 _mockConversationIntelligence.Object);
             action.Should().NotThrow();
         }
@@ -212,14 +212,14 @@ namespace TeamsBot.Tests.Handlers
             // Act & Assert - Following MCP defensive programming patterns
             var action = () => new TeamsAIActivityHandler(
                 null!,
-                _mockAzureDevOpsService.Object,
+                _mockWorkItemCreationService.Object,
                 _mockConversationIntelligence.Object);
             action.Should().Throw<ArgumentNullException>()
                 .WithParameterName("logger");
         }
 
         [Fact]
-        public void Constructor_WithNullAzureDevOpsService_ThrowsArgumentNullException()
+    public void Constructor_WithNullAzureDevOpsService_ThrowsArgumentNullException()
         {
             // Arrange & Act & Assert
             var action = () => new TeamsAIActivityHandler(
@@ -227,7 +227,7 @@ namespace TeamsBot.Tests.Handlers
                 null!,
                 _mockConversationIntelligence.Object);
             action.Should().Throw<ArgumentNullException>()
-                .WithParameterName("azureDevOpsService");
+        .WithParameterName("workItemCreationService");
         }
 
         [Fact]
@@ -236,7 +236,7 @@ namespace TeamsBot.Tests.Handlers
             // Arrange & Act & Assert
             var action = () => new TeamsAIActivityHandler(
                 _mockLogger.Object,
-                _mockAzureDevOpsService.Object,
+                _mockWorkItemCreationService.Object,
                 null!);
             action.Should().Throw<ArgumentNullException>()
                 .WithParameterName("conversationIntelligence");

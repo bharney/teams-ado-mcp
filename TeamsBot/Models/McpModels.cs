@@ -41,15 +41,5 @@ namespace TeamsBot.Models
         public Dictionary<string, object> Metadata { get; set; } = new();
     }
 
-    /// <summary>
-    /// Result from MCP work item creation
-    /// </summary>
-    public class WorkItemResult
-    {
-        public int? Id { get; set; }
-        public string? Url { get; set; }
-        public bool Success { get; set; }
-        public string? ErrorMessage { get; set; }
-        public Dictionary<string, object> AdditionalData { get; set; } = new();
-    }
+    // NOTE: WorkItemResult definition removed. Use McpServer.Models.WorkItemResult across solution to avoid duplication.
 }

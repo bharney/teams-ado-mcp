@@ -42,12 +42,12 @@ namespace TeamsBot.Services
             _logger = logger;
         }
 
-        public async Task<TodoItem?> ExtractActionItemAsync(string text)
+    public async Task<TodoItem?> ExtractActionItemAsync(string text)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(text))
-                    return null;
+            return null;
 
                 // Remove common command prefixes
                 var cleanedText = text.Replace("/create work item:", "", StringComparison.OrdinalIgnoreCase)
@@ -79,7 +79,7 @@ namespace TeamsBot.Services
             }
         }
 
-        public async Task<IEnumerable<TodoItem>> ExtractFromFacilitatorPromptAsync(MeetingContext context)
+    public async Task<IEnumerable<TodoItem>> ExtractFromFacilitatorPromptAsync(MeetingContext context)
         {
             var items = new List<TodoItem>();
 
@@ -93,7 +93,7 @@ namespace TeamsBot.Services
                     {
                         var actionText = match.Groups[1].Value.Trim();
                         var item = await ExtractActionItemAsync(actionText);
-                        
+
                         if (item != null)
                         {
                             item.FacilitatorId = context.FacilitatorId;
@@ -111,7 +111,7 @@ namespace TeamsBot.Services
             return items;
         }
 
-        public async Task<WorkItemType> ClassifyWorkItemTypeAsync(string text)
+    public Task<WorkItemType> ClassifyWorkItemTypeAsync(string text)
         {
             var lowerText = text.ToLowerInvariant();
 
@@ -120,12 +120,12 @@ namespace TeamsBot.Services
             {
                 if (patterns.Any(pattern => lowerText.Contains(pattern)))
                 {
-                    return workItemType;
+                    return Task.FromResult(workItemType);
                 }
             }
 
             // Default to Task if no specific pattern matches
-            return WorkItemType.Task;
+            return Task.FromResult(WorkItemType.Task);
         }
 
         private static string ExtractTitle(string text)
@@ -162,13 +162,13 @@ namespace TeamsBot.Services
         private static string ExtractPriority(string text)
         {
             var lowerText = text.ToLowerInvariant();
-            
+
             if (lowerText.Contains("critical") || lowerText.Contains("urgent") || lowerText.Contains("high priority"))
                 return "High";
-            
+
             if (lowerText.Contains("low priority") || lowerText.Contains("nice to have"))
                 return "Low";
-            
+
             return "Medium"; // Default priority
         }
     }

@@ -19,8 +19,8 @@
     <!-- Authentication Dependencies -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.17" NoWarn="NU1605" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="8.0.17" NoWarn="NU1605" />
-    <PackageReference Include="Microsoft.Identity.Web" Version="3.3.0" />
-    <PackageReference Include="Microsoft.Identity.Web.DownstreamApi" Version="3.3.0" />
+    <PackageReference Include="Microsoft.Identity.Web" Version="3.4.0" />
+    <PackageReference Include="Microsoft.Identity.Web.DownstreamApi" Version="3.4.0" />
     
     <!-- Azure SDK Dependencies -->
     <PackageReference Include="Azure.Identity" Version="1.12.1" />

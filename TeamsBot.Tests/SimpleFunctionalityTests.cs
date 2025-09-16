@@ -35,7 +35,7 @@ namespace TeamsBot.Tests.Handlers
             };
 
             // Act - Simulate the keyword detection logic from TeamsAIActivityHandler
-            bool containsKeywords = !string.IsNullOrEmpty(message) && 
+            bool containsKeywords = !string.IsNullOrEmpty(message) &&
                 facilitatorKeywords.Any(keyword => message.ToLowerInvariant().Contains(keyword));
 
             // Assert
@@ -108,13 +108,13 @@ namespace TeamsBot.Tests.Handlers
         {
             // Arrange
             var mockLogger = new Mock<ILogger<TeamsAIActivityHandler>>();
-            var mockAzureDevOpsService = new Mock<McpServer.Services.IAzureDevOpsService>();
+            var mockWorkItemCreation = new Mock<IWorkItemCreationService>();
             var mockConversationIntelligence = new Mock<IConversationIntelligenceService>();
 
             // Act
             var handler = new TeamsAIActivityHandler(
-                mockLogger.Object, 
-                mockAzureDevOpsService.Object, 
+                mockLogger.Object,
+                mockWorkItemCreation.Object,
                 mockConversationIntelligence.Object);
 
             // Assert

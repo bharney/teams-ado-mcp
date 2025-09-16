@@ -26,12 +26,12 @@ namespace TeamsBot.Services
             _logger = logger;
         }
 
-        public async Task StoreConversationContextAsync(IActivity activity, CancellationToken cancellationToken)
+        public Task StoreConversationContextAsync(IActivity activity, CancellationToken cancellationToken)
         {
             try
             {
                 var conversationId = activity.Conversation.Id;
-                
+
                 if (!_conversationHistory.ContainsKey(conversationId))
                 {
                     _conversationHistory[conversationId] = new List<IActivity>();
@@ -51,21 +51,22 @@ namespace TeamsBot.Services
             {
                 _logger.LogError(ex, "Error storing conversation context");
             }
+            return Task.CompletedTask;
         }
 
-        public async Task<MeetingContext> GetMeetingContextAsync(string conversationId, CancellationToken cancellationToken)
+        public Task<MeetingContext> GetMeetingContextAsync(string conversationId, CancellationToken cancellationToken)
         {
             _meetingContexts.TryGetValue(conversationId, out var context);
-            return context ?? new MeetingContext { ConversationId = conversationId };
+            return Task.FromResult(context ?? new MeetingContext { ConversationId = conversationId });
         }
 
-        public async Task<IEnumerable<IActivity>> GetRecentMessagesAsync(string conversationId, int count, CancellationToken cancellationToken)
+        public Task<IEnumerable<IActivity>> GetRecentMessagesAsync(string conversationId, int count, CancellationToken cancellationToken)
         {
             if (_conversationHistory.TryGetValue(conversationId, out var messages))
             {
-                return messages.TakeLast(count);
+                return Task.FromResult<IEnumerable<IActivity>>(messages.TakeLast(count));
             }
-            return Enumerable.Empty<IActivity>();
+            return Task.FromResult<IEnumerable<IActivity>>(Enumerable.Empty<IActivity>());
         }
     }
 }

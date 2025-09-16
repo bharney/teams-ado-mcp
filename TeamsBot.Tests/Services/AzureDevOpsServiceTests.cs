@@ -44,7 +44,7 @@ namespace TeamsBot.Tests.Services
             };
 
             var expectedWorkItemId = 12345;
-            var expectedResponseContent = JsonSerializer.Serialize(new { Id = expectedWorkItemId, Url = "https://dev.azure.com/test" });
+            var expectedResponseContent = JsonSerializer.Serialize(new { id = expectedWorkItemId, url = "https://dev.azure.com/test" });
 
             // Mock configuration following MCP secure patterns
             var mockConfig = new AzureConfiguration
@@ -66,6 +66,7 @@ namespace TeamsBot.Tests.Services
             {
                 Content = new StringContent(expectedResponseContent)
             };
+            responseMessage.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
 
             _mockHttpMessageHandler.Protected()
                 .Setup<Task<HttpResponseMessage>>(
@@ -194,7 +195,7 @@ namespace TeamsBot.Tests.Services
                 x => x.Log(
                     LogLevel.Error,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to create work item") && 
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to create work item") &&
                                                   v.ToString()!.Contains("BadRequest")),
                     It.IsAny<Exception>(),
                     It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
@@ -208,13 +209,13 @@ namespace TeamsBot.Tests.Services
             var workItemId = 12345;
             var expectedResponse = JsonSerializer.Serialize(new
             {
-                Id = workItemId,
-                Url = "https://dev.azure.com/test/_workitems/edit/12345",
-                Fields = new
+                id = workItemId,
+                url = "https://dev.azure.com/test/_workitems/edit/12345",
+                fields = new Dictionary<string, object?>
                 {
-                    Title = "Test Work Item",
-                    State = "New",
-                    AssignedTo = "test@example.com"
+                    ["System.Title"] = "Test Work Item",
+                    ["System.State"] = "New",
+                    ["System.AssignedTo"] = "test@example.com"
                 }
             });
 
@@ -284,12 +285,14 @@ namespace TeamsBot.Tests.Services
                 .ReturnsAsync(mockConfig);
 
             var expectedWorkItemId = 12345;
-            var responseContent = JsonSerializer.Serialize(new { Id = expectedWorkItemId });
+            var responseContent = JsonSerializer.Serialize(new { id = expectedWorkItemId });
 
             var responseMessage = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(responseContent)
             };
+            responseMessage.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            responseMessage.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
 
             string? capturedRequestBody = null;
             _mockHttpMessageHandler.Protected()
@@ -351,11 +354,13 @@ namespace TeamsBot.Tests.Services
             _mockConfigProvider.Setup(x => x.GetConfigurationAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(mockConfig);
 
-            var responseContent = JsonSerializer.Serialize(new { Id = 12345 });
+            var responseContent = JsonSerializer.Serialize(new { id = 12345 });
             var responseMessage = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(responseContent)
             };
+            responseMessage.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            responseMessage.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
 
             string? capturedRequestBody = null;
             _mockHttpMessageHandler.Protected()

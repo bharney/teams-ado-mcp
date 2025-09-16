@@ -1,5 +1,6 @@
 using System.Text.Json;
 using TeamsBot.Models;
+using McpServer.Models; // Use unified WorkItemResult
 
 namespace TeamsBot.Services
 {
@@ -25,7 +26,7 @@ namespace TeamsBot.Services
         private readonly string _adoProject;
 
         public McpClientService(
-            HttpClient httpClient, 
+            HttpClient httpClient,
             IConfiguration configuration,
             ILogger<McpClientService> logger)
         {
@@ -68,9 +69,13 @@ namespace TeamsBot.Services
                 var responseContent = await response.Content.ReadAsStringAsync();
                 var mcpResponse = JsonSerializer.Deserialize<McpToolResponse>(responseContent);
 
-                if (mcpResponse?.Success == true && mcpResponse.Result != null)
+                if (mcpResponse?.Success == true && mcpResponse.Result is not null)
                 {
-                    return JsonSerializer.Deserialize<WorkItemResult>(mcpResponse.Result.ToString()) 
+                    var payload = mcpResponse.Result.ToString();
+                    if (string.IsNullOrWhiteSpace(payload))
+                        throw new InvalidOperationException("MCP response result payload was empty");
+
+                    return JsonSerializer.Deserialize<WorkItemResult>(payload)
                            ?? throw new InvalidOperationException("Failed to deserialize work item result");
                 }
 
@@ -107,10 +112,14 @@ namespace TeamsBot.Services
                 var responseContent = await response.Content.ReadAsStringAsync();
                 var mcpResponse = JsonSerializer.Deserialize<McpToolResponse>(responseContent);
 
-                if (mcpResponse?.Success == true && mcpResponse.Result != null)
+                if (mcpResponse?.Success == true && mcpResponse.Result is not null)
                 {
-                    return JsonSerializer.Deserialize<IEnumerable<WorkItemResult>>(mcpResponse.Result.ToString()) 
-                           ?? Enumerable.Empty<WorkItemResult>();
+                    var payload = mcpResponse.Result.ToString();
+                    if (!string.IsNullOrWhiteSpace(payload))
+                    {
+                        return JsonSerializer.Deserialize<IEnumerable<WorkItemResult>>(payload)
+                               ?? Enumerable.Empty<WorkItemResult>();
+                    }
                 }
 
                 return Enumerable.Empty<WorkItemResult>();

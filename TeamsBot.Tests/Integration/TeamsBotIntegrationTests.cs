@@ -130,9 +130,8 @@ namespace TeamsBot.Tests.Integration
             var response = await _client.PostAsJsonAsync("/api/messages", botMessage);
 
             // Assert
-            // Without proper Bot Framework authentication configuration, this returns 500
-            // TODO: Once bot authentication is configured, this should return 401 Unauthorized
-            response.StatusCode.Should().Be(System.Net.HttpStatusCode.InternalServerError);
+            // With no Bot Framework credentials supplied, endpoint should reject with 401 Unauthorized
+            response.StatusCode.Should().Be(System.Net.HttpStatusCode.Unauthorized);
         }
 
         [Theory]
