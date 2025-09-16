@@ -178,7 +178,18 @@ namespace TeamsBot.Configuration
 
                 // Get sensitive values from Key Vault or secure configuration
                 config.Bot.MicrosoftAppPassword = await GetSecretAsync("MicrosoftAppPassword", cancellationToken);
-                config.AzureDevOps.PersonalAccessToken = await GetSecretAsync("AzureDevOpsPersonalAccessToken", cancellationToken);
+                // Retrieve PAT; don't overwrite bound value if secret lookup returns empty
+                var patFromSecret = await GetSecretAsync("AzureDevOpsPersonalAccessToken", cancellationToken);
+                if (!string.IsNullOrWhiteSpace(patFromSecret))
+                {
+                    config.AzureDevOps.PersonalAccessToken = patFromSecret;
+                }
+                else if (!string.IsNullOrWhiteSpace(_configuration["AzureDevOps:PersonalAccessToken"]))
+                {
+                    // Support nested key fallback if user stored it under section
+                    config.AzureDevOps.PersonalAccessToken = _configuration["AzureDevOps:PersonalAccessToken"]!;
+                    _logger.LogDebug("Using nested configuration key AzureDevOps:PersonalAccessToken for PAT");
+                }
                 config.McpServer.ApiKey = await GetSecretAsync("McpServerApiKey", cancellationToken);
                 config.TeamsAi.OpenAiApiKey = await GetSecretAsync("OpenAiApiKey", cancellationToken);
 

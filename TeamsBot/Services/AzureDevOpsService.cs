@@ -65,6 +65,12 @@ namespace TeamsBot.Services
                     return null;
                 }
 
+                if (string.IsNullOrWhiteSpace(_configuration.PersonalAccessToken))
+                {
+                    _logger.LogWarning("Skipping work item creation: Azure DevOps PAT not loaded. Ensure user secret 'AzureDevOpsPersonalAccessToken' or 'AzureDevOps:PersonalAccessToken' is set for TeamsBot project.");
+                    return null;
+                }
+
                 _logger.LogInformation("Creating work item: {Title}", actionItem.Title);
 
                 // Prepare work item data using ADO REST API format
@@ -73,13 +79,20 @@ namespace TeamsBot.Services
                     new { op = "add", path = "/fields/System.Title", value = actionItem.Title },
                     new { op = "add", path = "/fields/System.Description", value = actionItem.Description },
                     new { op = "add", path = "/fields/Microsoft.VSTS.Common.Priority", value = GetPriorityValue(actionItem.Priority) },
-                    new { op = "add", path = "/fields/System.WorkItemType", value = actionItem.WorkItemType }
+                    // NOTE: Do NOT patch System.WorkItemType when creating; the type is specified in the URL ($Task, $Bug, etc.)
                 };
 
                 // Add assignee if specified
                 if (!string.IsNullOrEmpty(actionItem.AssignedTo))
                 {
-                    workItemData.Add(new { op = "add", path = "/fields/System.AssignedTo", value = actionItem.AssignedTo });
+                    if (IsLikelyIdentity(actionItem.AssignedTo))
+                    {
+                        workItemData.Add(new { op = "add", path = "/fields/System.AssignedTo", value = actionItem.AssignedTo });
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Skipping AssignedTo value '{AssignedTo}' – doesn't look like a resolvable identity (expect email/UPN).", actionItem.AssignedTo);
+                    }
                 }
 
                 // Add default area and iteration paths if configured
@@ -94,25 +107,69 @@ namespace TeamsBot.Services
                 }
 
                 var json = JsonSerializer.Serialize(workItemData, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                _logger.LogDebug("Work item PATCH payload: {Payload}", json);
                 var content = new StringContent(json, Encoding.UTF8, "application/json-patch+json");
 
-                // Create work item via ADO REST API
+                // Create work item via ADO REST API (type specified via $Type suffix)
                 var url = $"https://dev.azure.com/{_configuration.Organization}/{_configuration.Project}/_apis/wit/workitems/${actionItem.WorkItemType}?api-version=7.0";
+                _logger.LogDebug("POST {Url}", url);
+
                 var response = await _httpClient.PostAsync(url, content, cancellationToken);
 
-                if (response.IsSuccessStatusCode)
+                var contentType = response.Content.Headers.ContentType?.MediaType;
+                var rawBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
                 {
-                    var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                    var workItem = JsonSerializer.Deserialize<WorkItemResponse>(responseContent);
-                    
-                    _logger.LogInformation("Successfully created work item {WorkItemId}", workItem?.Id);
-                    return workItem?.Id;
+                    // Attempt targeted diagnostics
+                    string diagnostic = string.Empty;
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(rawBody);
+                        var root = doc.RootElement;
+                        var message = TryGetJsonString(root, "message") ?? string.Empty;
+                        var typeKey = TryGetJsonString(root, "typeKey") ?? string.Empty;
+                        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && message.Contains("expired", StringComparison.OrdinalIgnoreCase))
+                        {
+                            diagnostic = "Personal Access Token appears expired. Generate a new PAT (Work Items Read & Write) and update user-secrets: dotnet user-secrets set AzureDevOpsPersonalAccessToken <NEW_PAT> --project ./TeamsBot";
+                        }
+                        else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest && typeKey.Equals("WorkItemFieldInvalidException", StringComparison.OrdinalIgnoreCase) && message.Contains("Assigned To", StringComparison.OrdinalIgnoreCase))
+                        {
+                            diagnostic = "AssignedTo value not recognized. Supply a valid email/UPN or omit it. The bot skipped heuristic filtering but server still rejected value.";
+                        }
+                    }
+                    catch { /* ignore parse issues */ }
+
+                    _logger.LogError("Failed to create work item. Status: {StatusCode}, ContentType: {ContentType}, Body (truncated 500): {Body}{Diag}",
+                        response.StatusCode,
+                        contentType,
+                        rawBody.Length > 500 ? rawBody.Substring(0, 500) + "..." : rawBody,
+                        string.IsNullOrEmpty(diagnostic) ? string.Empty : $" Guidance: {diagnostic}");
+                    return null;
                 }
-                else
+
+                if (contentType is not null && !contentType.Contains("json", StringComparison.OrdinalIgnoreCase))
                 {
-                    var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                    _logger.LogError("Failed to create work item. Status: {StatusCode}, Error: {Error}", 
-                        response.StatusCode, errorContent);
+                    _logger.LogError("Unexpected non-JSON response creating work item. ContentType: {ContentType}, First200: {Snippet}",
+                        contentType,
+                        rawBody.Length > 200 ? rawBody.Substring(0, 200) + "..." : rawBody);
+                    return null;
+                }
+
+                try
+                {
+                    var workItem = JsonSerializer.Deserialize<WorkItemResponse>(rawBody);
+                    if (workItem?.Id != null)
+                    {
+                        _logger.LogInformation("Successfully created work item {WorkItemId}", workItem.Id);
+                        return workItem.Id;
+                    }
+                    _logger.LogWarning("JSON parsed but work item id missing. Raw (first 300): {Snippet}", rawBody.Length > 300 ? rawBody.Substring(0, 300) + "..." : rawBody);
+                    return null;
+                }
+                catch (JsonException jex)
+                {
+                    _logger.LogError(jex, "JSON deserialization failed for work item create response. First 300 chars: {Snippet}", rawBody.Length > 300 ? rawBody.Substring(0, 300) + "..." : rawBody);
                     return null;
                 }
             }
@@ -214,6 +271,27 @@ namespace TeamsBot.Services
                 "low" => 3,
                 _ => 2
             };
+        }
+
+        private static bool IsLikelyIdentity(string value)
+        {
+            // Simple heuristic: email / UPN or GUID
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            if (value.Contains('@')) return true;
+            if (Guid.TryParse(value, out _)) return true;
+            // Could extend with ADO identity format checks later
+            return false;
+        }
+
+        private static string? TryGetJsonString(JsonElement root, string propertyName)
+        {
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty(propertyName, out var prop))
+            {
+                if (prop.ValueKind == JsonValueKind.String)
+                    return prop.GetString();
+                return prop.ToString();
+            }
+            return null;
         }
     }
 
