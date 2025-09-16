@@ -6,6 +6,8 @@ using Microsoft.Bot.Schema.Teams;
 using System.Text.Json;
 using TeamsBot.Services;
 using TeamsBot.Models;
+using McpServer.Services; // Use consolidated Azure DevOps service
+using McpServer.Models;   // WorkItemRequest/Result
 
 namespace TeamsBot.Handlers
 {
@@ -17,12 +19,12 @@ namespace TeamsBot.Handlers
     public class TeamsAIActivityHandler : TeamsActivityHandler
     {
         private readonly ILogger<TeamsAIActivityHandler> _logger;
-        private readonly IAzureDevOpsService _azureDevOpsService;
+        private readonly McpServer.Services.IAzureDevOpsService _azureDevOpsService;
         private readonly IConversationIntelligenceService _conversationIntelligence;
 
         public TeamsAIActivityHandler(
             ILogger<TeamsAIActivityHandler> logger,
-            IAzureDevOpsService azureDevOpsService,
+            McpServer.Services.IAzureDevOpsService azureDevOpsService,
             IConversationIntelligenceService conversationIntelligence)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -41,11 +43,11 @@ namespace TeamsBot.Handlers
 
                 // Use AI-powered intent detection
                 var intentResult = await _conversationIntelligence.DetectIntentAsync(
-                    turnContext.Activity.Text ?? string.Empty, 
-                    context, 
+                    turnContext.Activity.Text ?? string.Empty,
+                    context,
                     cancellationToken);
 
-                _logger.LogInformation("Intent detection result: {Intent} (confidence: {Confidence})", 
+                _logger.LogInformation("Intent detection result: {Intent} (confidence: {Confidence})",
                     intentResult.Intent, intentResult.Confidence);
 
                 if (intentResult.IsFacilitatorPrompt && intentResult.Confidence > 0.7f)
@@ -95,7 +97,7 @@ namespace TeamsBot.Handlers
                     {
                         var welcomeMessage = "Hello! I'm your AI assistant for meetings. I can help identify action items and create Azure DevOps work items when facilitators make requests.";
                         await turnContext.SendActivityAsync(MessageFactory.Text(welcomeMessage), cancellationToken);
-                        
+
                         _logger.LogInformation("Welcomed new member: {MemberId}", member.Id);
                     }
                 }
@@ -114,22 +116,22 @@ namespace TeamsBot.Handlers
 
                 // Extract action item details using AI
                 var actionItem = await _conversationIntelligence.ExtractActionItemAsync(
-                    turnContext.Activity.Text ?? string.Empty, 
-                    context, 
+                    turnContext.Activity.Text ?? string.Empty,
+                    context,
                     cancellationToken);
-                
+
                 if (actionItem != null)
                 {
                     // Add user information to action item
                     actionItem.CreatedBy = turnContext.Activity.From?.Name ?? "Unknown";
-                    
+
                     // Create Azure DevOps work item
                     var workItemId = await CreateAzureDevOpsWorkItem(actionItem, cancellationToken);
-                    
-                    var responseMessage = workItemId.HasValue 
+
+                    var responseMessage = workItemId.HasValue
                         ? $"✅ Created Azure DevOps work item #{workItemId.Value}: {actionItem.Title}"
                         : "❌ Failed to create work item. Please check the configuration.";
-                    
+
                     await turnContext.SendActivityAsync(MessageFactory.Text(responseMessage), cancellationToken);
                 }
                 else
@@ -156,11 +158,11 @@ namespace TeamsBot.Handlers
                 // 1. User's Teams role in the meeting
                 // 2. Azure AD group membership
                 // 3. Custom permissions stored in database
-                
+
                 // For now, return true for all users (implement proper role checking later)
                 var userId = turnContext.Activity.From?.Id;
                 _logger.LogDebug("Checking facilitator permissions for user: {UserId}", userId);
-                
+
                 // TODO: Implement actual permission checking using Microsoft Graph API
                 // Example: Check if user is in "Meeting Facilitators" Azure AD group
                 return Task.FromResult(true);
@@ -178,7 +180,7 @@ namespace TeamsBot.Handlers
             {
                 // Build context from conversation metadata
                 var context = new List<string>();
-                
+
                 // Add conversation type information
                 if (turnContext.Activity.Conversation?.ConversationType != null)
                 {
@@ -236,20 +238,26 @@ namespace TeamsBot.Handlers
             try
             {
                 _logger.LogInformation("Creating Azure DevOps work item: {@ActionItem}", actionItem);
-                
-                // Use the actual Azure DevOps service to create work items
-                var workItemId = await _azureDevOpsService.CreateWorkItemAsync(actionItem, cancellationToken);
-                
-                if (workItemId.HasValue)
+                // Map ActionItemDetails to WorkItemRequest (TeamsBot -> McpServer model)
+                var request = new WorkItemRequest
                 {
-                    _logger.LogInformation("Created work item {WorkItemId}", workItemId.Value);
-                }
-                else
+                    Title = actionItem.Title,
+                    Description = actionItem.Description,
+                    WorkItemType = actionItem.WorkItemType,
+                    Priority = actionItem.Priority,
+                    AssignedTo = actionItem.AssignedTo
+                };
+
+                var workItem = await _azureDevOpsService.CreateWorkItemAsync(request);
+
+                if (workItem != null && workItem.Id > 0)
                 {
-                    _logger.LogWarning("Failed to create work item for action item: {Title}", actionItem.Title);
+                    _logger.LogInformation("Created work item {WorkItemId}", workItem.Id);
+                    return workItem.Id;
                 }
-                
-                return workItemId;
+
+                _logger.LogWarning("Failed to create work item for action item: {Title}", actionItem.Title);
+                return null;
             }
             catch (Exception ex)
             {

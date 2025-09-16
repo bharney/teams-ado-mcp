@@ -33,6 +33,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TeamsBot\TeamsBot.csproj" />
+    <ProjectReference Include="..\McpServer\McpServer.csproj" />
   </ItemGroup>
 
 </Project>

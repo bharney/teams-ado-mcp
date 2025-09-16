@@ -4,6 +4,7 @@ using FluentAssertions;
 using TeamsBot.Handlers;
 using TeamsBot.Models;
 using TeamsBot.Services;
+using McpServer.Services; // consolidated ADO service
 using Xunit;
 
 namespace TeamsBot.Tests.Handlers
@@ -55,7 +56,7 @@ namespace TeamsBot.Tests.Handlers
             };
 
             // Act - Apply the same logic used in TeamsAIActivityHandler
-            var result = facilitatorKeywords.Any(keyword => 
+            var result = facilitatorKeywords.Any(keyword =>
                 message.ToLowerInvariant().Contains(keyword));
 
             // Assert - Verify keyword detection
@@ -184,13 +185,13 @@ namespace TeamsBot.Tests.Handlers
     public class TeamsAIActivityHandlerIntegrationTests
     {
         private readonly Mock<ILogger<TeamsAIActivityHandler>> _mockLogger;
-        private readonly Mock<IAzureDevOpsService> _mockAzureDevOpsService;
+        private readonly Mock<McpServer.Services.IAzureDevOpsService> _mockAzureDevOpsService;
         private readonly Mock<IConversationIntelligenceService> _mockConversationIntelligence;
 
         public TeamsAIActivityHandlerIntegrationTests()
         {
             _mockLogger = new Mock<ILogger<TeamsAIActivityHandler>>();
-            _mockAzureDevOpsService = new Mock<IAzureDevOpsService>();
+            _mockAzureDevOpsService = new Mock<McpServer.Services.IAzureDevOpsService>();
             _mockConversationIntelligence = new Mock<IConversationIntelligenceService>();
         }
 
@@ -199,8 +200,8 @@ namespace TeamsBot.Tests.Handlers
         {
             // Act & Assert - Constructor should work with valid dependencies
             var action = () => new TeamsAIActivityHandler(
-                _mockLogger.Object, 
-                _mockAzureDevOpsService.Object, 
+                _mockLogger.Object,
+                _mockAzureDevOpsService.Object,
                 _mockConversationIntelligence.Object);
             action.Should().NotThrow();
         }
@@ -210,8 +211,8 @@ namespace TeamsBot.Tests.Handlers
         {
             // Act & Assert - Following MCP defensive programming patterns
             var action = () => new TeamsAIActivityHandler(
-                null!, 
-                _mockAzureDevOpsService.Object, 
+                null!,
+                _mockAzureDevOpsService.Object,
                 _mockConversationIntelligence.Object);
             action.Should().Throw<ArgumentNullException>()
                 .WithParameterName("logger");
@@ -222,8 +223,8 @@ namespace TeamsBot.Tests.Handlers
         {
             // Arrange & Act & Assert
             var action = () => new TeamsAIActivityHandler(
-                _mockLogger.Object, 
-                null!, 
+                _mockLogger.Object,
+                null!,
                 _mockConversationIntelligence.Object);
             action.Should().Throw<ArgumentNullException>()
                 .WithParameterName("azureDevOpsService");
@@ -234,8 +235,8 @@ namespace TeamsBot.Tests.Handlers
         {
             // Arrange & Act & Assert
             var action = () => new TeamsAIActivityHandler(
-                _mockLogger.Object, 
-                _mockAzureDevOpsService.Object, 
+                _mockLogger.Object,
+                _mockAzureDevOpsService.Object,
                 null!);
             action.Should().Throw<ArgumentNullException>()
                 .WithParameterName("conversationIntelligence");

@@ -6,6 +6,7 @@ using Microsoft.Bot.Connector.Authentication;
 using TeamsBot.Handlers;
 using TeamsBot.Configuration;
 using TeamsBot.Services;
+using McpServer.Services; // Use consolidated Azure DevOps service from McpServer
 using Azure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,6 +17,10 @@ builder.Services.AddSingleton<DefaultAzureCredential>();
 
 // Add secure configuration provider following MCP patterns
 builder.Services.AddSecureConfiguration();
+
+// Bind Azure DevOps options so consolidated service receives correct org/project
+builder.Services.Configure<McpServer.Configuration.AzureDevOpsOptions>(
+    builder.Configuration.GetSection(McpServer.Configuration.AzureDevOpsOptions.SectionName));
 
 // Bot Framework Authentication (standard)
 builder.Services.AddSingleton<BotFrameworkAuthentication, ConfigurationBotFrameworkAuthentication>();
@@ -29,8 +34,8 @@ builder.Services.AddTransient<IBot, TeamsAIActivityHandler>();
 // Add custom services for Azure DevOps and conversation intelligence
 builder.Services.AddScoped<IConversationIntelligenceService, ConversationIntelligenceService>();
 
-// Add Azure DevOps service with HTTP client configuration
-builder.Services.AddHttpClient<IAzureDevOpsService, AzureDevOpsService>(client =>
+// Register consolidated Azure DevOps service implementation from McpServer
+builder.Services.AddHttpClient<McpServer.Services.IAzureDevOpsService, McpServer.Services.AzureDevOpsService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
 });
@@ -127,5 +132,8 @@ app.MapControllers();
 
 app.Run();
 
-// Make the Program class public for testing
-public partial class Program { }
+// Make the Program class public for testing inside TeamsBot namespace to avoid collision with McpServer Program
+namespace TeamsBot
+{
+    public partial class Program { }
+}

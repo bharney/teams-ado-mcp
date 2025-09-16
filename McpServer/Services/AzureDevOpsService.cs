@@ -79,6 +79,18 @@ public class AzureDevOpsService : IAzureDevOpsService
 
         _logger.LogInformation("Creating work item: {Title} of type {WorkItemType}", request.Title, request.WorkItemType);
 
+        // Pre-flight validation of configuration (common source of 404s when org/project not bound)
+        if (string.IsNullOrWhiteSpace(_options.Organization) || string.IsNullOrWhiteSpace(_options.Project))
+        {
+            _logger.LogError("Azure DevOps options not bound correctly. Organization='{Org}' Project='{Proj}'. Check that AzureDevOps section is present and bound in Program.cs", _options.Organization, _options.Project);
+            throw new InvalidOperationException("Azure DevOps configuration invalid: organization or project missing");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.WorkItemType))
+        {
+            throw new ArgumentException("WorkItemType is required", nameof(request));
+        }
+
         try
         {
             // Prepare the JSON Patch document for work item creation
@@ -91,11 +103,19 @@ public class AzureDevOpsService : IAzureDevOpsService
             // Add optional fields if provided
             if (!string.IsNullOrEmpty(request.Priority))
             {
-                patchDocument.Add(new AdoWorkItemCreateRequest 
-                { 
-                    Path = "/fields/Microsoft.VSTS.Common.Priority", 
-                    Value = request.Priority 
-                });
+                var normalizedPriority = NormalizePriority(request.Priority);
+                if (normalizedPriority != null)
+                {
+                    patchDocument.Add(new AdoWorkItemCreateRequest
+                    {
+                        Path = "/fields/Microsoft.VSTS.Common.Priority",
+                        Value = normalizedPriority
+                    });
+                }
+                else
+                {
+                    _logger.LogWarning("Skipping invalid priority value '{Priority}' (expected High/Medium/Low or 1-4)", request.Priority);
+                }
             }
 
             if (!string.IsNullOrEmpty(request.AssignedTo))
@@ -111,8 +131,8 @@ public class AzureDevOpsService : IAzureDevOpsService
             var response = await ExecuteWithRetryAsync(async () =>
             {
                 // IMPORTANT: Do NOT prefix with leading '/' or HttpClient will drop the organization path segment in BaseAddress
-                _logger.LogDebug("CreateWorkItem BaseUrl={BaseUrl} Project={Project} Type={Type}", _options.BaseUrl, _options.Project, request.WorkItemType);
-                var url = $"{_options.BaseUrl}/{_options.Project}/_apis/wit/workitems/${request.WorkItemType}?api-version={_options.ApiVersion}";
+                _logger.LogDebug("CreateWorkItem BaseUrl={BaseUrl} Org={Org} Project={Project} Type={Type} ApiVersion={ApiVersion}", _options.BaseUrl, _options.Organization, _options.Project, request.WorkItemType, _options.ApiVersion);
+                var url = $"{_options.BaseUrl.TrimEnd('/')}/{_options.Project}/_apis/wit/workitems/${request.WorkItemType}?api-version={_options.ApiVersion}";
                 _logger.LogDebug("POST work item URL (absolute): {Url}", url);
                 var json = JsonSerializer.Serialize(patchDocument, _jsonOptions);
                 var content = new StringContent(json, Encoding.UTF8, "application/json-patch+json");
@@ -446,6 +466,11 @@ public class AzureDevOpsService : IAzureDevOpsService
                 return; // Assume token is still valid - Azure.Identity handles refresh
             }
 
+            if (string.IsNullOrWhiteSpace(_options.Organization) || string.IsNullOrWhiteSpace(_options.Project))
+            {
+                _logger.LogWarning("EnsureAuthenticated invoked with missing Organization='{Org}' Project='{Proj}' - requests may fail with 404", _options.Organization, _options.Project);
+            }
+
             // Local development fallback: support Personal Access Token from options (User Secrets) or environment variable (NOT for production)
             // Order of precedence:
             // 1. _options.PersonalAccessToken (User Secrets)
@@ -575,4 +600,29 @@ public class AzureDevOpsService : IAzureDevOpsService
     }
 
     // Disposal pattern removed to avoid premature disposal when tool instance is cached.
+
+    /// <summary>
+    /// Normalizes various priority representations to Azure DevOps numeric form (1-4) or returns null if invalid.
+    /// ADO default meanings: 1=High,2=Medium,3=Low,4=Lowest (project may customize but we map common labels).
+    /// </summary>
+    private static string? NormalizePriority(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var v = raw.Trim();
+        // Accept numeric 1-4 directly
+        if (int.TryParse(v, out var num) && num >= 1 && num <= 4)
+        {
+            return num.ToString();
+        }
+        // Map common textual values
+        return v.ToLowerInvariant() switch
+        {
+            "high" => "1",
+            "medium" => "2",
+            "med" => "2",
+            "low" => "3",
+            "lowest" => "4",
+            _ => null
+        };
+    }
 }

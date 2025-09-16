@@ -16,12 +16,12 @@ namespace TeamsBot.Tests.Integration
     /// Integration tests for the entire TeamsBot application
     /// Tests the full request pipeline from HTTP endpoint to bot logic
     /// </summary>
-    public class TeamsBotIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
+    public class TeamsBotIntegrationTests : IClassFixture<WebApplicationFactory<TeamsBot.Program>>
     {
-        private readonly WebApplicationFactory<Program> _factory;
+        private readonly WebApplicationFactory<TeamsBot.Program> _factory;
         private readonly HttpClient _client;
 
-        public TeamsBotIntegrationTests(WebApplicationFactory<Program> factory)
+        public TeamsBotIntegrationTests(WebApplicationFactory<TeamsBot.Program> factory)
         {
             _factory = factory.WithWebHostBuilder(builder =>
             {
@@ -32,7 +32,7 @@ namespace TeamsBot.Tests.Integration
                     services.AddLogging(logging => logging.AddConsole());
                 });
             });
-            
+
             _client = _factory.CreateClient();
         }
 
@@ -44,7 +44,7 @@ namespace TeamsBot.Tests.Integration
 
             // Assert
             response.Should().BeSuccessful();
-            
+
             var content = await response.Content.ReadAsStringAsync();
             content.Should().Contain("healthy");
             content.Should().Contain("timestamp");
@@ -59,13 +59,13 @@ namespace TeamsBot.Tests.Integration
             // Assert
             response.Should().BeSuccessful();
             response.Content.Headers.ContentType?.MediaType.Should().Be("application/json");
-            
+
             var jsonContent = await response.Content.ReadAsStringAsync();
-            var healthResponse = JsonSerializer.Deserialize<HealthResponse>(jsonContent, new JsonSerializerOptions 
-            { 
-                PropertyNameCaseInsensitive = true 
+            var healthResponse = JsonSerializer.Deserialize<HealthResponse>(jsonContent, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
             });
-            
+
             healthResponse.Should().NotBeNull();
             healthResponse!.Status.Should().Be("healthy");
             healthResponse.Timestamp.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));
@@ -154,7 +154,7 @@ namespace TeamsBot.Tests.Integration
             // Act & Assert
             // If the factory can create a client, the application started successfully
             _client.Should().NotBeNull();
-            
+
             // Verify basic connectivity
             var response = await _client.GetAsync("/api/messages/health");
             response.Should().BeSuccessful();
@@ -171,7 +171,7 @@ namespace TeamsBot.Tests.Integration
 
             // Assert
             config.Should().NotBeNull();
-            
+
             // Verify some basic configuration sections exist
             config.GetSection("Logging").Should().NotBeNull();
         }
