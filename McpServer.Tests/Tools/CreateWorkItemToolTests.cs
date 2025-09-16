@@ -48,14 +48,14 @@ public class CreateWorkItemToolTests
     public async Task ExecuteAsync_ShouldCreateWorkItem_WhenValidParametersProvided()
     {
         // Arrange
-        var expectedWorkItem = new WorkItemResult 
-        { 
-            Id = 123, 
+        var expectedWorkItem = new WorkItemResult
+        {
+            Id = 123,
             Title = "Test Work Item",
             State = "New",
             WorkItemType = "Task"
         };
-        
+
         _mockAdoService
             .Setup(x => x.CreateWorkItemAsync(It.IsAny<WorkItemRequest>()))
             .ReturnsAsync(expectedWorkItem);
@@ -72,7 +72,7 @@ public class CreateWorkItemToolTests
         result.Should().NotBeNull();
         result.Success.Should().BeTrue();
         result.Data.Should().NotBeNull();
-        
+
         var workItem = JsonSerializer.Deserialize<WorkItemResult>(JsonSerializer.Serialize(result.Data));
         workItem.Should().NotBeNull();
         workItem!.Id.Should().Be(123);
@@ -117,14 +117,14 @@ public class CreateWorkItemToolTests
     public async Task ExecuteAsync_ShouldUseDefaultValues_WhenOptionalParametersOmitted()
     {
         // Arrange
-        var expectedWorkItem = new WorkItemResult 
-        { 
-            Id = 456, 
+        var expectedWorkItem = new WorkItemResult
+        {
+            Id = 456,
             Title = "Test Task",
             State = "New",
             WorkItemType = "Task"
         };
-        
+
         _mockAdoService
             .Setup(x => x.CreateWorkItemAsync(It.IsAny<WorkItemRequest>()))
             .ReturnsAsync(expectedWorkItem);
@@ -139,7 +139,7 @@ public class CreateWorkItemToolTests
 
         // Assert
         result.Success.Should().BeTrue();
-        
+
         _mockAdoService.Verify(x => x.CreateWorkItemAsync(It.Is<WorkItemRequest>(req =>
             req.Title == "Test Task" &&
             req.WorkItemType == "Task" &&
@@ -173,14 +173,14 @@ public class CreateWorkItemToolTests
     public async Task ExecuteAsync_ShouldPassAllParameters_WhenAllParametersProvided()
     {
         // Arrange
-        var expectedWorkItem = new WorkItemResult 
-        { 
-            Id = 789, 
+        var expectedWorkItem = new WorkItemResult
+        {
+            Id = 789,
             Title = "Complex Work Item",
             State = "In Progress",
             WorkItemType = "User Story"
         };
-        
+
         _mockAdoService
             .Setup(x => x.CreateWorkItemAsync(It.IsAny<WorkItemRequest>()))
             .ReturnsAsync(expectedWorkItem);
@@ -190,20 +190,19 @@ public class CreateWorkItemToolTests
         parameters.Add("description", "Detailed description with requirements");
         parameters.Add("workItemType", "User Story");
         parameters.Add("priority", "2");
-        parameters.Add("assignedTo", "user@example.com");
+        // assignedTo intentionally omitted while feature disabled
 
         // Act
         var result = await _tool.ExecuteAsync(parameters);
 
         // Assert
         result.Success.Should().BeTrue();
-        
+
         _mockAdoService.Verify(x => x.CreateWorkItemAsync(It.Is<WorkItemRequest>(req =>
             req.Title == "Complex Work Item" &&
             req.Description == "Detailed description with requirements" &&
             req.WorkItemType == "User Story" &&
-            req.Priority == "2" &&
-            req.AssignedTo == "user@example.com"
+            req.Priority == "2"
         )), Times.Once);
     }
 
@@ -211,14 +210,14 @@ public class CreateWorkItemToolTests
     public async Task ExecuteAsync_ShouldLogInformation_WhenExecutingSuccessfully()
     {
         // Arrange
-        var expectedWorkItem = new WorkItemResult 
-        { 
-            Id = 999, 
+        var expectedWorkItem = new WorkItemResult
+        {
+            Id = 999,
             Title = "Logged Work Item",
             State = "New",
             WorkItemType = "Bug"
         };
-        
+
         _mockAdoService
             .Setup(x => x.CreateWorkItemAsync(It.IsAny<WorkItemRequest>()))
             .ReturnsAsync(expectedWorkItem);
@@ -232,7 +231,7 @@ public class CreateWorkItemToolTests
 
         // Assert
         result.Success.Should().BeTrue();
-        
+
         // Verify logging occurred (checking that Info level was called)
         _mockLogger.Verify(
             x => x.Log(
@@ -253,14 +252,14 @@ public class CreateWorkItemToolTests
     public async Task ExecuteAsync_ShouldAcceptValidWorkItemTypes(string workItemType)
     {
         // Arrange
-        var expectedWorkItem = new WorkItemResult 
-        { 
-            Id = 100, 
+        var expectedWorkItem = new WorkItemResult
+        {
+            Id = 100,
             Title = $"Test {workItemType}",
             State = "New",
             WorkItemType = workItemType
         };
-        
+
         _mockAdoService
             .Setup(x => x.CreateWorkItemAsync(It.IsAny<WorkItemRequest>()))
             .ReturnsAsync(expectedWorkItem);

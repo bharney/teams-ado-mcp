@@ -46,7 +46,6 @@ public class WorkItemCreationServiceTests
       Title = "Implement caching layer",
       Description = "Add Redis based caching",
       Priority = "High",
-      AssignedTo = "user@example.com",
       WorkItemType = "Task"
     };
 
@@ -63,7 +62,7 @@ public class WorkItemCreationServiceTests
         r.Title == details.Title &&
         r.Description == details.Description &&
         r.Priority == details.Priority &&
-        r.AssignedTo == details.AssignedTo &&
+        r.AssignedTo == null &&
         r.WorkItemType == details.WorkItemType
     )), Times.Once);
   }

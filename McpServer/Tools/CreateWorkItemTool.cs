@@ -33,7 +33,8 @@ public class CreateWorkItemTool : IMcpTool
             // Get optional parameters
             var description = parameters.GetValue<string>("description", required: false);
             var priority = parameters.GetValue<string>("priority", required: false);
-            var assignedTo = parameters.GetValue<string>("assignedTo", required: false);
+            // AssignedTo parameter intentionally ignored (feature temporarily disabled)
+            // var assignedTo = parameters.GetValue<string>("assignedTo", required: false);
 
             _logger.LogInformation("Creating work item: {Title} of type {WorkItemType}", title, workItemType);
 
@@ -43,8 +44,7 @@ public class CreateWorkItemTool : IMcpTool
                 Title = title,
                 Description = description,
                 WorkItemType = workItemType,
-                Priority = priority,
-                AssignedTo = assignedTo
+                Priority = priority
             };
 
             // Call Azure DevOps service

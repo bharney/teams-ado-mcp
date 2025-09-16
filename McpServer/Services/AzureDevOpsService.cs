@@ -118,14 +118,15 @@ public class AzureDevOpsService : IAzureDevOpsService
                 }
             }
 
-            if (!string.IsNullOrEmpty(request.AssignedTo))
-            {
-                patchDocument.Add(new AdoWorkItemCreateRequest 
-                { 
-                    Path = "/fields/System.AssignedTo", 
-                    Value = request.AssignedTo 
-                });
-            }
+            // Intentionally ignoring AssignedTo for now per request to avoid incorrect auto-assignment
+            // if (!string.IsNullOrEmpty(request.AssignedTo))
+            // {
+            //     patchDocument.Add(new AdoWorkItemCreateRequest 
+            //     { 
+            //         Path = "/fields/System.AssignedTo", 
+            //         Value = request.AssignedTo 
+            //     });
+            // }
 
             // Execute the API call with retry logic
             var response = await ExecuteWithRetryAsync(async () =>
@@ -340,14 +341,15 @@ public class AzureDevOpsService : IAzureDevOpsService
                 });
             }
 
-            if (!string.IsNullOrEmpty(request.AssignedTo))
-            {
-                patchDocument.Add(new AdoWorkItemCreateRequest 
-                { 
-                    Path = "/fields/System.AssignedTo", 
-                    Value = request.AssignedTo 
-                });
-            }
+            // Intentionally ignoring AssignedTo for now per request to avoid incorrect auto-assignment
+            // if (!string.IsNullOrEmpty(request.AssignedTo))
+            // {
+            //     patchDocument.Add(new AdoWorkItemCreateRequest 
+            //     { 
+            //         Path = "/fields/System.AssignedTo", 
+            //         Value = request.AssignedTo 
+            //     });
+            // }
 
             if (!patchDocument.Any())
             {
