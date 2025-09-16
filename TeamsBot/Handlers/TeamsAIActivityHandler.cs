@@ -19,16 +19,16 @@ namespace TeamsBot.Handlers
     public class TeamsAIActivityHandler : TeamsActivityHandler
     {
         private readonly ILogger<TeamsAIActivityHandler> _logger;
-        private readonly McpServer.Services.IAzureDevOpsService _azureDevOpsService;
+        private readonly IWorkItemCreationService _workItemCreationService;
         private readonly IConversationIntelligenceService _conversationIntelligence;
 
         public TeamsAIActivityHandler(
             ILogger<TeamsAIActivityHandler> logger,
-            McpServer.Services.IAzureDevOpsService azureDevOpsService,
+            IWorkItemCreationService workItemCreationService,
             IConversationIntelligenceService conversationIntelligence)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _azureDevOpsService = azureDevOpsService ?? throw new ArgumentNullException(nameof(azureDevOpsService));
+            _workItemCreationService = workItemCreationService ?? throw new ArgumentNullException(nameof(workItemCreationService));
             _conversationIntelligence = conversationIntelligence ?? throw new ArgumentNullException(nameof(conversationIntelligence));
         }
 
@@ -126,7 +126,9 @@ namespace TeamsBot.Handlers
                     actionItem.CreatedBy = turnContext.Activity.From?.Name ?? "Unknown";
 
                     // Create Azure DevOps work item
-                    var workItemId = await CreateAzureDevOpsWorkItem(actionItem, cancellationToken);
+                    var workItemResult = await _workItemCreationService.CreateFromActionItemAsync(actionItem, cancellationToken);
+
+                    var workItemId = workItemResult?.Id;
 
                     var responseMessage = workItemId.HasValue
                         ? $"✅ Created Azure DevOps work item #{workItemId.Value}: {actionItem.Title}"
@@ -233,37 +235,6 @@ namespace TeamsBot.Handlers
             }
         }
 
-        private async Task<int?> CreateAzureDevOpsWorkItem(ActionItemDetails actionItem, CancellationToken cancellationToken)
-        {
-            try
-            {
-                _logger.LogInformation("Creating Azure DevOps work item: {@ActionItem}", actionItem);
-                // Map ActionItemDetails to WorkItemRequest (TeamsBot -> McpServer model)
-                var request = new WorkItemRequest
-                {
-                    Title = actionItem.Title,
-                    Description = actionItem.Description,
-                    WorkItemType = actionItem.WorkItemType,
-                    Priority = actionItem.Priority,
-                    AssignedTo = actionItem.AssignedTo
-                };
-
-                var workItem = await _azureDevOpsService.CreateWorkItemAsync(request);
-
-                if (workItem != null && workItem.Id > 0)
-                {
-                    _logger.LogInformation("Created work item {WorkItemId}", workItem.Id);
-                    return workItem.Id;
-                }
-
-                _logger.LogWarning("Failed to create work item for action item: {Title}", actionItem.Title);
-                return null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating Azure DevOps work item");
-                return null;
-            }
-        }
+        // Legacy direct creation method removed in favor of IWorkItemCreationService adapter.
     }
 }

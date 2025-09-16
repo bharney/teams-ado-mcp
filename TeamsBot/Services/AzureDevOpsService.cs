@@ -158,7 +158,7 @@ namespace TeamsBot.Services
 
                 try
                 {
-                    var workItem = JsonSerializer.Deserialize<WorkItemResponse>(rawBody);
+                    var workItem = JsonSerializer.Deserialize<WorkItemResponse>(rawBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                     if (workItem?.Id != null)
                     {
                         _logger.LogInformation("Successfully created work item {WorkItemId}", workItem.Id);
@@ -199,7 +199,7 @@ namespace TeamsBot.Services
                 {
                     var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
                     var workItem = JsonSerializer.Deserialize<WorkItemResponse>(responseContent);
-                    
+
                     return workItem != null ? new WorkItemInfo
                     {
                         Id = workItem.Id,
@@ -211,7 +211,7 @@ namespace TeamsBot.Services
                 }
                 else
                 {
-                    _logger.LogError("Failed to get work item {WorkItemId}. Status: {StatusCode}", 
+                    _logger.LogError("Failed to get work item {WorkItemId}. Status: {StatusCode}",
                         workItemId, response.StatusCode);
                     return null;
                 }
@@ -250,7 +250,7 @@ namespace TeamsBot.Services
                 else
                 {
                     var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                    _logger.LogError("Failed to update work item {WorkItemId}. Status: {StatusCode}, Error: {Error}", 
+                    _logger.LogError("Failed to update work item {WorkItemId}. Status: {StatusCode}, Error: {Error}",
                         workItemId, response.StatusCode, errorContent);
                     return false;
                 }
@@ -300,15 +300,21 @@ namespace TeamsBot.Services
     /// </summary>
     public class WorkItemResponse
     {
+        [System.Text.Json.Serialization.JsonPropertyName("id")]
         public int Id { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("url")]
         public string? Url { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("fields")]
         public WorkItemFields? Fields { get; set; }
     }
 
     public class WorkItemFields
     {
+        [System.Text.Json.Serialization.JsonPropertyName("System.Title")]
         public string? Title { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("System.State")]
         public string? State { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("System.AssignedTo")]
         public string? AssignedTo { get; set; }
     }
 

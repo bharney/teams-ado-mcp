@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using TeamsBot.Services;
 using TeamsBot.Models;
+using McpServer.Models; // for WorkItemResult after consolidation
 using Xunit;
 using FluentAssertions;
 
@@ -123,20 +124,7 @@ namespace TeamsBot.Tests.Services
             context.Metadata.Should().BeEmpty();
         }
 
-        [Fact]
-        public void WorkItemResult_DefaultValues_ShouldBeCorrect()
-        {
-            // Act
-            var result = new WorkItemResult();
-
-            // Assert
-            result.Id.Should().BeNull();
-            result.Url.Should().BeNull();
-            result.Success.Should().BeFalse();
-            result.ErrorMessage.Should().BeNull();
-            result.AdditionalData.Should().NotBeNull();
-            result.AdditionalData.Should().BeEmpty();
-        }
+        // WorkItemResult tests now covered in McpServer test project; removed duplicate default test.
 
         [Theory]
         [InlineData(WorkItemType.Bug, "Bug")]

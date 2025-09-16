@@ -2,8 +2,7 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using TeamsBot.Configuration;
 using TeamsBot.Models;
-using Azure.AI.OpenAI; // Azure OpenAI integration
-using OpenAI.Chat; // Chat types
+// Azure OpenAI integration temporarily stubbed
 
 namespace TeamsBot.Services
 {
@@ -21,9 +20,9 @@ namespace TeamsBot.Services
 
     public class ConversationIntelligenceService : IConversationIntelligenceService
     {
-    private readonly ILogger<ConversationIntelligenceService> _logger;
-    private readonly ISecureConfigurationProvider _configProvider;
-    private readonly IAzureOpenAIClient? _openAI; // optional, falls back if null
+        private readonly ILogger<ConversationIntelligenceService> _logger;
+        private readonly ISecureConfigurationProvider _configProvider;
+        private readonly IAzureOpenAIClient? _openAI; // optional, falls back if null
 
         public ConversationIntelligenceService(
             ILogger<ConversationIntelligenceService> logger,
@@ -99,7 +98,7 @@ namespace TeamsBot.Services
             var facilitatorKeywords = new[]
             {
                 "create work item", "create task", "add to backlog", "action item", "action items",
-                "follow up", "follow-up", "todo", "to do", "task for", "assign to", 
+                "follow up", "follow-up", "todo", "to do", "task for", "assign to",
                 "create bug", "create story", "create epic", "file a bug", "log a task",
                 "new task", "new work item", "add task", "track this", "make a note"
             };
@@ -120,13 +119,13 @@ namespace TeamsBot.Services
             }
 
             var intent = containsKeywords ? "create_work_item" : "general_conversation";
-            
+
             return Task.FromResult(new IntentDetectionResult
             {
                 IsFacilitatorPrompt = containsKeywords,
                 Confidence = Math.Min(confidence, 1.0f),
                 Intent = intent,
-                Reasoning = containsKeywords 
+                Reasoning = containsKeywords
                     ? $"Contains facilitator keywords. Confidence boosted by: {(hasUrgency ? "urgency, " : "")}{(message.Contains("@") ? "assignment, " : "")}".TrimEnd(' ', ',')
                     : "No facilitator keywords detected"
             });
@@ -152,13 +151,9 @@ namespace TeamsBot.Services
             {
                 var system = "You classify if a Teams chat message is a facilitator prompt to create an Azure DevOps work item. Return strict JSON with fields: isFacilitatorPrompt (bool), intent (string), confidence (0-1 float), reasoning (string). If not about work items, intent is general_conversation.";
                 var user = $"Message: {message}\nContext: {context}";
-                var chat = new ChatMessage[]
-                {
-                    ChatMessage.CreateSystemMessage(system),
-                    ChatMessage.CreateUserMessage(user)
-                };
-                var completion = await _openAI!.CompleteChatAsync(chat, ct);
-                var content = completion.Content.FirstOrDefault()?.Text?.Trim();
+                var chat = new[] { system, user };
+                var completionRaw = await _openAI!.CompleteChatAsync(chat, ct);
+                var content = completionRaw?.Trim();
                 if (string.IsNullOrWhiteSpace(content)) return null;
                 using var doc = JsonDocument.Parse(content);
                 var root = doc.RootElement;
@@ -183,13 +178,9 @@ namespace TeamsBot.Services
             {
                 var system = "Extract structured action item details from a Teams message if it is a facilitator prompt. Return JSON with: title, description, priority (High|Medium|Low), assignedTo (nullable), workItemType (Task|Bug|User Story|Epic), estimatedEffort (nullable), dueDate (nullable). Keep title concise.";
                 var user = $"Message: {message}\nContext: {context}";
-                var chat = new ChatMessage[]
-                {
-                    ChatMessage.CreateSystemMessage(system),
-                    ChatMessage.CreateUserMessage(user)
-                };
-                var completion = await _openAI!.CompleteChatAsync(chat, ct);
-                var content = completion.Content.FirstOrDefault()?.Text?.Trim();
+                var chat = new[] { system, user };
+                var completionRaw = await _openAI!.CompleteChatAsync(chat, ct);
+                var content = completionRaw?.Trim();
                 if (string.IsNullOrWhiteSpace(content)) return null;
                 using var doc = JsonDocument.Parse(content);
                 var root = doc.RootElement;
@@ -216,7 +207,7 @@ namespace TeamsBot.Services
             // Remove common prefixes
             var cleanMessage = message;
             var prefixes = new[] { "create task", "create work item", "add task", "file a bug", "create bug", "action item" };
-            
+
             foreach (var prefix in prefixes)
             {
                 if (cleanMessage.ToLowerInvariant().StartsWith(prefix))

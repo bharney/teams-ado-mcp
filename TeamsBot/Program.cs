@@ -58,6 +58,8 @@ builder.Services.AddHttpClient<McpServer.Services.IAzureDevOpsService, McpServer
 {
     client.Timeout = TimeSpan.FromSeconds(30);
 });
+// Adapter for bot layer action item -> work item creation
+builder.Services.AddScoped<IWorkItemCreationService, WorkItemCreationService>();
 
 // Add additional services for full MCP integration
 builder.Services.AddScoped<IConversationService, ConversationService>();
