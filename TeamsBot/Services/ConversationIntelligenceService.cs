@@ -2,6 +2,8 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using TeamsBot.Configuration;
 using TeamsBot.Models;
+using Azure.AI.OpenAI; // Azure OpenAI integration
+using OpenAI.Chat; // Chat types
 
 namespace TeamsBot.Services
 {
@@ -19,15 +21,18 @@ namespace TeamsBot.Services
 
     public class ConversationIntelligenceService : IConversationIntelligenceService
     {
-        private readonly ILogger<ConversationIntelligenceService> _logger;
-        private readonly ISecureConfigurationProvider _configProvider;
+    private readonly ILogger<ConversationIntelligenceService> _logger;
+    private readonly ISecureConfigurationProvider _configProvider;
+    private readonly IAzureOpenAIClient? _openAI; // optional, falls back if null
 
         public ConversationIntelligenceService(
             ILogger<ConversationIntelligenceService> logger,
-            ISecureConfigurationProvider configProvider)
+            ISecureConfigurationProvider configProvider,
+            IAzureOpenAIClient? openAI = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _configProvider = configProvider ?? throw new ArgumentNullException(nameof(configProvider));
+            _openAI = openAI; // may be null when not configured
         }
 
         public async Task<IntentDetectionResult> DetectIntentAsync(string message, string context, CancellationToken cancellationToken = default)
@@ -37,15 +42,12 @@ namespace TeamsBot.Services
                 _logger.LogDebug("Detecting intent for message: {Message}", message);
 
                 var config = await _configProvider.GetConfigurationAsync();
-                
-                // For now, use keyword-based detection
-                // TODO: Integrate with Azure OpenAI or OpenAI API when configuration is available
-                if (!string.IsNullOrEmpty(config.TeamsAi.OpenAiApiKey) && config.TeamsAi.EnableIntentDetection)
+                if (_openAI != null && config.TeamsAi.EnableIntentDetection)
                 {
-                    // TODO: Implement AI-based intent detection
-                    _logger.LogInformation("AI-based intent detection would be used here (OpenAI key configured)");
+                    var aiResult = await InvokeIntentModel(message, context, cancellationToken);
+                    if (aiResult != null)
+                        return aiResult;
                 }
-
                 return await FallbackIntentDetection(message);
             }
             catch (Exception ex)
@@ -62,15 +64,12 @@ namespace TeamsBot.Services
                 _logger.LogDebug("Extracting action item from message: {Message}", message);
 
                 var config = await _configProvider.GetConfigurationAsync();
-
-                // For now, use keyword-based extraction
-                // TODO: Integrate with Azure OpenAI or OpenAI API when configuration is available
-                if (!string.IsNullOrEmpty(config.TeamsAi.OpenAiApiKey) && config.TeamsAi.EnableActionItemExtraction)
+                if (_openAI != null && config.TeamsAi.EnableActionItemExtraction)
                 {
-                    // TODO: Implement AI-based action item extraction
-                    _logger.LogInformation("AI-based action item extraction would be used here (OpenAI key configured)");
+                    var aiItem = await InvokeExtractionModel(message, context, cancellationToken);
+                    if (aiItem != null)
+                        return aiItem;
                 }
-
                 return FallbackActionItemExtraction(message);
             }
             catch (Exception ex)
@@ -145,6 +144,71 @@ namespace TeamsBot.Services
                 EstimatedEffort = ExtractEffort(message),
                 DueDate = ExtractDueDate(message)
             };
+        }
+
+        private async Task<IntentDetectionResult?> InvokeIntentModel(string message, string context, CancellationToken ct)
+        {
+            try
+            {
+                var system = "You classify if a Teams chat message is a facilitator prompt to create an Azure DevOps work item. Return strict JSON with fields: isFacilitatorPrompt (bool), intent (string), confidence (0-1 float), reasoning (string). If not about work items, intent is general_conversation.";
+                var user = $"Message: {message}\nContext: {context}";
+                var chat = new ChatMessage[]
+                {
+                    ChatMessage.CreateSystemMessage(system),
+                    ChatMessage.CreateUserMessage(user)
+                };
+                var completion = await _openAI!.CompleteChatAsync(chat, ct);
+                var content = completion.Content.FirstOrDefault()?.Text?.Trim();
+                if (string.IsNullOrWhiteSpace(content)) return null;
+                using var doc = JsonDocument.Parse(content);
+                var root = doc.RootElement;
+                return new IntentDetectionResult
+                {
+                    IsFacilitatorPrompt = root.GetProperty("isFacilitatorPrompt").GetBoolean(),
+                    Intent = root.GetProperty("intent").GetString() ?? "general_conversation",
+                    Confidence = (float)root.GetProperty("confidence").GetDouble(),
+                    Reasoning = root.GetProperty("reasoning").GetString()
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Azure OpenAI intent model failed, using fallback");
+                return null;
+            }
+        }
+
+        private async Task<ActionItemDetails?> InvokeExtractionModel(string message, string context, CancellationToken ct)
+        {
+            try
+            {
+                var system = "Extract structured action item details from a Teams message if it is a facilitator prompt. Return JSON with: title, description, priority (High|Medium|Low), assignedTo (nullable), workItemType (Task|Bug|User Story|Epic), estimatedEffort (nullable), dueDate (nullable). Keep title concise.";
+                var user = $"Message: {message}\nContext: {context}";
+                var chat = new ChatMessage[]
+                {
+                    ChatMessage.CreateSystemMessage(system),
+                    ChatMessage.CreateUserMessage(user)
+                };
+                var completion = await _openAI!.CompleteChatAsync(chat, ct);
+                var content = completion.Content.FirstOrDefault()?.Text?.Trim();
+                if (string.IsNullOrWhiteSpace(content)) return null;
+                using var doc = JsonDocument.Parse(content);
+                var root = doc.RootElement;
+                return new ActionItemDetails
+                {
+                    Title = root.GetProperty("title").GetString() ?? FallbackActionItemExtraction(message).Title,
+                    Description = root.GetProperty("description").GetString() ?? message,
+                    Priority = root.TryGetProperty("priority", out var p) ? p.GetString() ?? "Medium" : "Medium",
+                    AssignedTo = root.TryGetProperty("assignedTo", out var a) ? a.GetString() : null,
+                    WorkItemType = root.TryGetProperty("workItemType", out var w) ? w.GetString() ?? "Task" : "Task",
+                    EstimatedEffort = root.TryGetProperty("estimatedEffort", out var e) ? e.GetString() : null,
+                    DueDate = root.TryGetProperty("dueDate", out var d) ? d.GetString() : null
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Azure OpenAI extraction model failed, using fallback");
+                return null;
+            }
         }
 
         private string ExtractTitle(string message)

@@ -6,6 +6,7 @@ using Microsoft.Bot.Connector.Authentication;
 using TeamsBot.Handlers;
 using TeamsBot.Configuration;
 using TeamsBot.Services;
+using McpServer.Services; // Use consolidated Azure DevOps service from McpServer
 using Azure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,6 +17,29 @@ builder.Services.AddSingleton<DefaultAzureCredential>();
 
 // Add secure configuration provider following MCP patterns
 builder.Services.AddSecureConfiguration();
+
+// Bind Azure DevOps options so consolidated service receives correct org/project
+builder.Services.Configure<McpServer.Configuration.AzureDevOpsOptions>(
+    builder.Configuration.GetSection(McpServer.Configuration.AzureDevOpsOptions.SectionName));
+
+// Bind Azure OpenAI options (optional enablement)
+builder.Services.Configure<TeamsBot.Configuration.AzureOpenAIOptions>(
+    builder.Configuration.GetSection(TeamsBot.Configuration.AzureOpenAIOptions.SectionName));
+
+// Register Azure OpenAI client (uses DefaultAzureCredential) if endpoint configured
+builder.Services.AddSingleton<IAzureOpenAIClient>(sp =>
+{
+    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TeamsBot.Configuration.AzureOpenAIOptions>>().Value;
+    var cred = sp.GetRequiredService<DefaultAzureCredential>();
+    if (string.IsNullOrWhiteSpace(opts.Endpoint) || !opts.Enabled)
+    {
+        return null!; // DI will pass null to optional parameter (handled in service constructor)
+    }
+    return new AzureOpenAIClient(
+        sp.GetRequiredService<ILogger<AzureOpenAIClient>>(),
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TeamsBot.Configuration.AzureOpenAIOptions>>(),
+        cred);
+});
 
 // Bot Framework Authentication (standard)
 builder.Services.AddSingleton<BotFrameworkAuthentication, ConfigurationBotFrameworkAuthentication>();
@@ -29,8 +53,8 @@ builder.Services.AddTransient<IBot, TeamsAIActivityHandler>();
 // Add custom services for Azure DevOps and conversation intelligence
 builder.Services.AddScoped<IConversationIntelligenceService, ConversationIntelligenceService>();
 
-// Add Azure DevOps service with HTTP client configuration
-builder.Services.AddHttpClient<IAzureDevOpsService, AzureDevOpsService>(client =>
+// Register consolidated Azure DevOps service implementation from McpServer
+builder.Services.AddHttpClient<McpServer.Services.IAzureDevOpsService, McpServer.Services.AzureDevOpsService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
 });
@@ -127,5 +151,8 @@ app.MapControllers();
 
 app.Run();
 
-// Make the Program class public for testing
-public partial class Program { }
+// Make the Program class public for testing inside TeamsBot namespace to avoid collision with McpServer Program
+namespace TeamsBot
+{
+    public partial class Program { }
+}

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using TeamsBot.Handlers;
 using TeamsBot.Services;
+using McpServer.Services; // consolidated ADO service
 using TeamsBot.Models;
 using Xunit;
 using FluentAssertions;
@@ -107,7 +108,7 @@ namespace TeamsBot.Tests.Handlers
         {
             // Arrange
             var mockLogger = new Mock<ILogger<TeamsAIActivityHandler>>();
-            var mockAzureDevOpsService = new Mock<IAzureDevOpsService>();
+            var mockAzureDevOpsService = new Mock<McpServer.Services.IAzureDevOpsService>();
             var mockConversationIntelligence = new Mock<IConversationIntelligenceService>();
 
             // Act
