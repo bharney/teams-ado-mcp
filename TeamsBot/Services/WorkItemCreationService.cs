@@ -25,7 +25,7 @@ public class WorkItemCreationService : IWorkItemCreationService
       Title = actionItem.Title,
       Description = actionItem.Description,
       Priority = actionItem.Priority,
-      AssignedTo = actionItem.AssignedTo,
+  // AssignedTo intentionally omitted per request to avoid incorrect assignment
       WorkItemType = string.IsNullOrWhiteSpace(actionItem.WorkItemType) ? "Task" : actionItem.WorkItemType
     };
 

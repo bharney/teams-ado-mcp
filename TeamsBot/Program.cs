@@ -1,13 +1,15 @@
+using Azure.Identity;
+using McpServer.Services; // Use consolidated Azure DevOps service from McpServer
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Identity.Web;
 using Microsoft.Bot.Builder;
 using Microsoft.Bot.Builder.Integration.AspNet.Core;
 using Microsoft.Bot.Connector.Authentication;
-using TeamsBot.Handlers;
+using Microsoft.Identity.Web;
+using System.ClientModel;
+using System.Reflection;
 using TeamsBot.Configuration;
+using TeamsBot.Handlers;
 using TeamsBot.Services;
-using McpServer.Services; // Use consolidated Azure DevOps service from McpServer
-using Azure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,16 +31,22 @@ builder.Services.Configure<TeamsBot.Configuration.AzureOpenAIOptions>(
 // Register Azure OpenAI client (uses DefaultAzureCredential) if endpoint configured
 builder.Services.AddSingleton<IAzureOpenAIClient>(sp =>
 {
-    var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TeamsBot.Configuration.AzureOpenAIOptions>>().Value;
-    var cred = sp.GetRequiredService<DefaultAzureCredential>();
-    if (string.IsNullOrWhiteSpace(opts.Endpoint) || !opts.Enabled)
+    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TeamsBot.Configuration.AzureOpenAIOptions>>().Value;
+    if (!options.Enabled || string.IsNullOrWhiteSpace(options.Endpoint) || string.IsNullOrWhiteSpace(options.ChatDeployment))
     {
-        return null!; // DI will pass null to optional parameter (handled in service constructor)
+        return NullAzureOpenAIClient.Instance; // safe no-op implementation
     }
-    return new AzureOpenAIClient(
-        sp.GetRequiredService<ILogger<AzureOpenAIClient>>(),
-        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TeamsBot.Configuration.AzureOpenAIOptions>>(),
-        cred);
+    var logger = sp.GetRequiredService<ILogger<AzureOpenAIClient>>();
+    var cred = new ApiKeyCredential(builder.Configuration["OpenAiApiKey"]);
+    try
+    {
+        return new AzureOpenAIClient(sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TeamsBot.Configuration.AzureOpenAIOptions>>(), cred, logger);
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Falling back to NullAzureOpenAIClient due to initialization error");
+        return NullAzureOpenAIClient.Instance;
+    }
 });
 
 // Bot Framework Authentication (standard)
@@ -92,7 +100,31 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser());
 });
 
-builder.Services.AddControllers();
+// Add controllers using a strict whitelist: only load this assembly to avoid scanning OpenAI types
+builder.Services.AddControllers().ConfigureApplicationPartManager(apm =>
+{
+    try
+    {
+        var keep = typeof(TeamsBot.Program).Assembly.GetName().Name;
+        var remove = apm.ApplicationParts.Where(p => !string.Equals(p.Name, keep, StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var part in remove)
+        {
+            apm.ApplicationParts.Remove(part);
+        }
+    }
+    catch (ReflectionTypeLoadException rtle)
+    {
+        Console.WriteLine("[WARN] ReflectionTypeLoadException while configuring ApplicationParts:");
+        foreach (var le in rtle.LoaderExceptions ?? Array.Empty<Exception>())
+        {
+            Console.WriteLine("  -> " + le?.Message);
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[DEBUG] Failed strict ApplicationPart whitelist: {ex.Message}");
+    }
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

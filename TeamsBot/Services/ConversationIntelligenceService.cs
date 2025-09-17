@@ -1,8 +1,9 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Teams.AI.AI.Models;
+using OpenAI.Chat;
 using System.Text.Json;
 using TeamsBot.Configuration;
 using TeamsBot.Models;
-// Azure OpenAI integration temporarily stubbed
 
 namespace TeamsBot.Services
 {
@@ -145,13 +146,19 @@ namespace TeamsBot.Services
             };
         }
 
+        // Fix for CS0826: Explicitly specify the array type for 'chat' in both InvokeIntentModel and InvokeExtractionModel
+
         private async Task<IntentDetectionResult?> InvokeIntentModel(string message, string context, CancellationToken ct)
         {
             try
             {
                 var system = "You classify if a Teams chat message is a facilitator prompt to create an Azure DevOps work item. Return strict JSON with fields: isFacilitatorPrompt (bool), intent (string), confidence (0-1 float), reasoning (string). If not about work items, intent is general_conversation.";
                 var user = $"Message: {message}\nContext: {context}";
-                var chat = new[] { system, user };
+                var chat = new OpenAI.Chat.ChatMessage[]
+                {
+                    OpenAI.Chat.ChatMessage.CreateSystemMessage(system),
+                    OpenAI.Chat.ChatMessage.CreateUserMessage(user)
+                };
                 var completionRaw = await _openAI!.CompleteChatAsync(chat, ct);
                 var content = completionRaw?.Trim();
                 if (string.IsNullOrWhiteSpace(content)) return null;
@@ -178,7 +185,11 @@ namespace TeamsBot.Services
             {
                 var system = "Extract structured action item details from a Teams message if it is a facilitator prompt. Return JSON with: title, description, priority (High|Medium|Low), assignedTo (nullable), workItemType (Task|Bug|User Story|Epic), estimatedEffort (nullable), dueDate (nullable). Keep title concise.";
                 var user = $"Message: {message}\nContext: {context}";
-                var chat = new[] { system, user };
+                var chat = new OpenAI.Chat.ChatMessage[]
+                {
+                    OpenAI.Chat.ChatMessage.CreateSystemMessage(system),
+                    OpenAI.Chat.ChatMessage.CreateUserMessage(user)
+                };
                 var completionRaw = await _openAI!.CompleteChatAsync(chat, ct);
                 var content = completionRaw?.Trim();
                 if (string.IsNullOrWhiteSpace(content)) return null;
