@@ -13,8 +13,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
-  <!-- Ensure OpenAI SDK version alignment with TeamsBot to avoid NU1605 downgrade -->
-  <PackageReference Include="Azure.AI.OpenAI" Version="2.0.0-beta.2" />
+  <!-- Removed Azure.AI.OpenAI (tests rely on REST wrapper only) -->
     
     <!-- Bot Framework Testing -->
     <PackageReference Include="Microsoft.Bot.Builder.Testing" Version="4.22.7" />
